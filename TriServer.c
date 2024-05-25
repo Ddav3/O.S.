@@ -22,8 +22,8 @@ int delay = -1, timeOut;
 int semId = -2, shmId = -2, msgId = -2;
 char symbol1, symbol2, symbols[6];
 sigset_t disabledSigSet;
-struct sembuf p_ops[1];
-struct sembuf v_ops[1];
+struct sembuf p_ops[3];
+struct sembuf v_ops[3];
 
 typedef union semUnion
 {
@@ -478,13 +478,6 @@ int main(int argc, char *argv[])
         printf("entro");
         fflush(stdout);
         pause();
-        printf("esco");
-        fflush(stdout);
-        if (semctl(semId, 0 /*ignored*/, GETALL, semArgs) == -1)
-        {
-            perror("get error");
-            closure();
-        }
         disableSetandLock(0);
     } while ((memPointer->Client2 == -12) && delay != 0);
     // controlla solo il secondo client: dovesse essere -10: giocatore 2 automatico;

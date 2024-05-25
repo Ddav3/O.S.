@@ -20,8 +20,8 @@
 sigset_t disabledSigSet;
 int shmId = -3, semId = -4, msgId = -5;
 char *name, choice[1];
-struct sembuf p_ops[1];
-struct sembuf v_ops[1];
+struct sembuf p_ops[3];
+struct sembuf v_ops[3];
 int c1, c2, s;
 
 typedef union semUnion
@@ -299,6 +299,14 @@ int main(int argc, char *argv[])
         v_ops[i].sem_op = 1;
         v_ops[i].sem_flg = 0;
     }
+
+    // p_ops[0].sem_num = 0;
+    // p_ops[0].sem_op = -1;
+    // p_ops[0].sem_flg = 0;
+
+    // v_ops[0].sem_num = 0;
+    // v_ops[0].sem_op = 1;
+    // v_ops[0].sem_flg = 0;
 
     sigfillset(&disabledSigSet);
     sigdelset(&disabledSigSet, SIGINT);
