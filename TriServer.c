@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
     struct semid_ds dataStruct;
     mySU semArgs;
     semArgs.dataStruct = &dataStruct;
-    unsigned short values[] = {2, 1, 0};
+    unsigned short values[] = {1, 1, 0};
     semArgs.array = values;
 
     for (int i = 0; i < 3; i++)
