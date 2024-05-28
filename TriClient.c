@@ -20,8 +20,8 @@
 sigset_t disabledSigSet;
 int shmId = -3, semId = -4, msgId = -5;
 char *name, choice[1];
-struct sembuf p_ops[1];
-struct sembuf v_ops[1];
+struct sembuf p_ops[3];
+struct sembuf v_ops[3];
 int c1, c2, s;
 
 typedef union semUnion
@@ -90,7 +90,10 @@ void disableSetandLock(int n)
 
     if (semop(semId, &p_ops[n], 1) == -1)
     {
-        perror("Error in Semaphore Operation (C, p)");
+        printf("C%d) ", n);
+        fflush(stdout);
+        perror("Error in Semaphore P Operation");
+        closure();
     }
 }
 
@@ -98,7 +101,8 @@ void enableSetandUnlock(int n)
 {
     if (semop(semId, &v_ops[n], 1) == -1)
     {
-        perror("Error in Semaphore Operation (C, v)");
+        printf("C%d) ", n);
+        perror("Error in Semaphore V Operation");
         closure();
     }
 
@@ -119,6 +123,7 @@ void receiveMessage()
     }
     write(1, receiver.Text, msgSize);
 }
+
 void sigHandlerC(int signal) // #TODO
 {
 
@@ -134,7 +139,20 @@ void sigHandlerC(int signal) // #TODO
     else if (signal == SIGUSR1) //
     {
         disableSetandLock(0);
-
+        if (memPointer->Client1 == getpid())
+        {
+            printf("Tocca a te, giocatore 1. Scegli la tua mossa: ");
+            fflush(stdout);
+        }
+        else if (memPointer->Client2 == getpid())
+        {
+            printf("Tocca a te, giocatore 2. Scegli la tua mossa: ");
+            fflush(stdout);
+        }
+        else
+        {
+            perror("pid not present");
+        }
         enableSetandUnlock(0);
     }
     else if (signal == SIGUSR2) // è arrivato un messaggio
@@ -206,13 +224,11 @@ void makeMove()
     disableSetandLock(0);
     if (choice[0] < '1' || choice[0] > '9')
     {
-
-        memPointer->move = 0;
+        memPointer->move = -1;
     }
     else
     {
         memPointer->move = (choice[0] - '0') - 1;
-        printf("; %d è la tua choice", memPointer->move);
     }
 
     kill(memPointer->Server, SIGUSR1);
@@ -325,7 +341,7 @@ int main(int argc, char *argv[])
         receiver.Type = 1;
         if (argc == 3)
         {
-            // giocatore automatico
+            // giocatore automatico, cambiare questa parte #TODO
             memPointer->Client2 = -10;
             kill(memPointer->Server, SIGUSR1);
             enableSetandUnlock(0);
@@ -333,15 +349,18 @@ int main(int argc, char *argv[])
         }
         else
         {
+            kill(memPointer->Server, SIGUSR1);
             enableSetandUnlock(0);
-            // pause(); // #TODO controlla se c'è qualche caso da gestire
-        }
+            printf("In attesa di un secondo giocatore...\n");
+            fflush(stdout);
+            pause();
 
-        kill(memPointer->Server, SIGUSR1);
-        printf("In attesa di un secondo giocatore...\n");
-        fflush(stdout);
-        enableSetandUnlock(0);
-        pause();
+            disableSetandLock(0);
+            while (memPointer->onGame == 1)
+            {
+            }
+            enableSetandUnlock(0);
+        }
     }
     else if (memPointer->Client2 == -12)
     {
@@ -350,15 +369,40 @@ int main(int argc, char *argv[])
         kill(memPointer->Server, SIGUSR2);
         enableSetandUnlock(0);
         pause();
+
+        disableSetandLock(0);
+        while (memPointer->onGame == 1)
+        {
+            enableSetandUnlock(0);
+            disableSetandLock(2);
+
+            disableSetandLock(0);
+            if (memPointer->onGame != 0)
+            {
+                memPointer->current = getpid();
+                enableSetandUnlock(0);
+                showMatrix();
+
+                if (read(0, choice, 1) < 0)
+                {
+                    printf("Errore nella lettura.\n");
+                    fflush(stdout);
+                }
+                makeMove();
+                disableSetandLock(0);
+            }
+            enableSetandUnlock(1);
+        }
+        enableSetandUnlock(0);
     }
     else
     {
         printf("Partita occupata. Impossibile partecipare.");
         fflush(stdout);
-        enableSetandUnlock;
+        enableSetandUnlock(0);
+        closure();
     }
 
-    // segnalazione mossa sbagliata (dopo mossa scelta)
     // Abbandono con CTRL C + notifica altro giocatore
     // Time out per mossa + conseguenze
     // Modalità automatica (1 o 2 player)
@@ -369,62 +413,42 @@ int main(int argc, char *argv[])
     //     if (memPointer->Client1 == getpid())
     //     {
     //         enableSetandUnlock(0);
-
-    //         if (semop(semId, &p_ops[1], 1) < 0)
-    //         {
-    //             perror("Error in P operation (C1)");
-    //             closure();
-    //         }
-    //     }
-    //     else if (memPointer->Client2 == getpid())
-    //     {
-    //         enableSetandUnlock(0);
-
-    //         if (semop(semId, &p_ops[2], 1) < 0)
-    //         {
-    //             perror("Error in P operation (C2)");
-    //             closure();
-    //         }
-    //     }
-    //     disableSetandLock(0);
-    //     memPointer->current = getpid();
-    //     enableSetandUnlock(0);
-
-    //     showMatrix();
-
-    //     while (read(0, choice, 1) < 0)
-    //     {
-    //         printf("Errore nella lettura.\nRiprovare");
+    //         printf("\n%d\n", getpid());
     //         fflush(stdout);
-    //     }
-    //     makeMove();
-    //     showMatrix();
-
-    //     disableSetandLock(0);
-    //     if (memPointer->Client1 == getpid())
-    //     {
-    //         enableSetandUnlock(0);
-    //         if (semop(semId, &v_ops[2], 1) < 0)
-    //         {
-    //             perror("Error in P operation (C1)");
-    //             closure();
-    //         }
+    //         disableSetandLock(1);
     //     }
     //     else if (memPointer->Client2 == getpid())
     //     {
     //         enableSetandUnlock(0);
-    //         if (semop(semId, &v_ops[1], 1) < 0)
-    //         {
-    //             perror("Error in P operation (C2)");
-    //             closure();
-    //         }
+    //         printf("\n%d\n", getpid());
+    //         fflush(stdout);
+    //         disableSetandLock(2);
     //     }
+    //     else
+    //     {
+    //         enableSetandUnlock(0);
+    //         perror("Unrecognized pid error");
+    //         closure();
+    //     }
+    //     showMatrix();
     //     disableSetandLock(0);
+    //     if (memPointer->onGame != 0)
+    //     {
+    //         memPointer->current = getpid();
+    //         enableSetandUnlock(0);
+    //         if (read(0, choice, 1) < 0)
+    //         {
+    //             printf("Errore nella lettura.\n");
+    //             fflush(stdout);
+    //         }
+    //         makeMove();
+    //         disableSetandLock(0);
+    //     }
     // }
     // enableSetandUnlock(0);
 
     //------------------------------------------------------------------//
-
+    closure();
     printf("\nchiudo\n");
 
     return 0;
