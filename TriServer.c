@@ -93,6 +93,7 @@ void closure()
     return;
 }
 
+int value;
 void disableSetandLock(int n)
 {
 
@@ -105,7 +106,7 @@ void disableSetandLock(int n)
         closure();
     }
 
-    printf("abbasso %d\n", n);
+    printf("\nabbasso %d. Valore %d\n", n, semctl(semId, n, GETVAL));
 }
 
 void enableSetandUnlock(int n)
@@ -115,7 +116,7 @@ void enableSetandUnlock(int n)
         perror("Error in Semaphore Operation (S, v)");
         closure();
     }
-    printf("alzato %d\n", n);
+    printf("alzato %d. Valore: %d\n", n, semctl(semId, n, GETVAL));
     fflush(stdout);
 
     sigdelset(&disabledSigSet, SIGINT);
@@ -240,13 +241,15 @@ void sigHandler(int signal) // #TODO
                     {
                         if (memPointer->current == memPointer->Client1)
                         {
-                            enableSetandUnlock(2);
-                            sendMessage("Tocca a Te!\nScegli la tua mossa: ", 0, 1);
+                            // enableSetandUnlock(2);
+                            // sendMessage("Tocca a Te!\nScegli la tua mossa: ", 0, 1);
+                            kill(memPointer->Client2, SIGUSR1);
                         }
                         else if (memPointer->current == memPointer->Client2)
                         {
-                            enableSetandUnlock(1);
-                            sendMessage("Tocca a Te!\nScegli la tua mossa: ", 1, 0);
+                            // enableSetandUnlock(1);
+                            // sendMessage("Tocca a Te!\nScegli la tua mossa: ", 1, 0);
+                            kill(memPointer->Client1, SIGUSR1);
                         }
                         else
                         {
@@ -258,15 +261,36 @@ void sigHandler(int signal) // #TODO
                 else
                 {
                     // compilo la matrice
-                    if (memPointer->current == memPointer->Client1)
+                    if (memPointer->move != -1)
                     {
-                        memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol1;
+                        if (memPointer->current == memPointer->Client1)
+                        {
+                            memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol1;
+                        }
+                        else if (memPointer->current == memPointer->Client2)
+                        {
+                            memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol2;
+                        }
+                        else
+                        {
+                            perror("current turn unvalid");
+                        }
+                        printf("%d, %d. Turno di %d.   (%d  -  %d)\n", memPointer->move / 3, memPointer->move % 3, memPointer->current, memPointer->Client1, memPointer->Client2);
+                        fflush(stdout);
                     }
                     else
                     {
-                        memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol2;
+                        if (memPointer->current == memPointer->Client1)
+                        {
+                            enableSetandUnlock(2);
+                            sendMessage("Mossa non valida. Turno perso.\n", 1, 0);
+                        }
+                        else if (memPointer->current == memPointer->Client2)
+                        {
+                            enableSetandUnlock(1);
+                            sendMessage("Mossa non valida. Turno perso.\n", 0, 1);
+                        }
                     }
-                    printf("%d, %d. Turno di %d.   (%d  -  %d)\n", memPointer->move / 3, memPointer->move % 3, memPointer->current, memPointer->Client1, memPointer->Client2);
 
                     // controllo potenziale vittoria/fine partita
                     for (int i = 0; i < 3; i++)
@@ -312,12 +336,12 @@ void sigHandler(int signal) // #TODO
                     {
                         if (memPointer->current == memPointer->Client1)
                         {
-                            enableSetandUnlock(2);
+                            // enableSetandUnlock(2);
                             sendMessage("Tocca a Te!\nScegli la tua mossa: ", 0, 1);
                         }
                         else if (memPointer->current == memPointer->Client2)
                         {
-                            enableSetandUnlock(1);
+                            //     enableSetandUnlock(1);
                             sendMessage("Tocca a Te!\nScegli la tua mossa: ", 1, 0);
                         }
                         else
@@ -344,7 +368,8 @@ void sigHandler(int signal) // #TODO
                 memPointer->move = timeOut; // #TODO togli
                 // #TODO il Server deve informare dei simboli per i giocatori
 
-                sendMessage("Entrambi i giocatori sono stati individuati. Partita avviata.\n", 1, 1);
+                sendMessage("Entrambi i giocatori sono stati individuati. Partita avviata.\nCominci tu, giocatore 1. Scegli la tua mossa: ", 1, 0);
+                sendMessage("Entrambi i giocatori sono stati individuati. Partita avviata.\n", 0, 1);
             }
 
             enableSetandUnlock(0);
