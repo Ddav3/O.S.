@@ -359,7 +359,8 @@ int main(int argc, char *argv[])
                 disableSetandLock(0);
                 if (memPointer->onGame == 1)
                 {
-                    memPointer->current == getpid();
+                    memPointer->current = getpid();
+                    printf("%d e %d\n", memPointer->current, memPointer->Client1);
                     enableSetandUnlock(0);
                     while (read(0, choice, 1) < 0)
                     {
@@ -404,8 +405,9 @@ int main(int argc, char *argv[])
             if (memPointer->onGame == 1)
             {
                 memPointer->current = getpid();
-                enableSetandUnlock(0);
+                printf("%d e %d\n", memPointer->current, memPointer->Client1);
 
+                enableSetandUnlock(0);
                 while (read(0, choice, 1) < 0)
                 {
                     perror("Errore in lettura");

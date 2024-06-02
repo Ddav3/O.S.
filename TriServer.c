@@ -250,14 +250,11 @@ void sigHandler(int signal) // #TODO
             {
                 printf("Entrambi i giocatori Individuati.\n");
                 fflush(stdout);
-                memPointer->move = timeOut; // #TODO togli
                 memPointer->current = memPointer->Client1;
                 // #TODO il Server deve informare dei simboli per i giocatori
 
                 sendMessage("Entrambi i giocatori sono stati individuati. Partita avviata.\nCominci tu, giocatore 1. Scegli la tua mossa: ", 1, 0);
                 sendMessage("Entrambi i giocatori sono stati individuati. Partita avviata.\n", 0, 1);
-                // kill(memPointer->Client1, SIGUSR2);
-                // kill(memPointer->Client2, SIGUSR2);
             }
             enableSetandUnlock(0);
         }
@@ -452,12 +449,12 @@ int main(int argc, char *argv[])
         pause();
         disableSetandLock(0);
     } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11) && delay != 0);
-    // altrimenti, se il valore -12 è stato sistituito, si è trovato il giocatore 2
+
     enableSetandUnlock(0);
 
     while (delay != 0)
     {
-        printf("--------------\n\n");
+        printf("----------------\n\n");
         disableSetandLock(3);
         // mossa
         {
@@ -571,6 +568,7 @@ int main(int argc, char *argv[])
         }
 
         printf("Changing turn");
+        disableSetandLock(0);
         if (memPointer->current == memPointer->Client1)
         {
             printf(" to 2. Sono %d e current: %d\n", memPointer->Client1, memPointer->current);
@@ -597,6 +595,7 @@ int main(int argc, char *argv[])
         {
             perror("Current turn unclear");
         }
+        enableSetandUnlock(0);
 
         // system('clear');
     }
