@@ -17,13 +17,15 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#define semNum 4
+
 // Variabili globali e funzioni ------------------------------------------------------//
 int delay = -1, timeOut;
 int semId = -2, shmId = -2, msgId = -2;
 char symbol1, symbol2, symbols[6];
 sigset_t disabledSigSet;
-struct sembuf p_ops[3];
-struct sembuf v_ops[3];
+struct sembuf p_ops[semNum];
+struct sembuf v_ops[semNum];
 
 typedef union semUnion
 {
@@ -93,11 +95,11 @@ void closure()
     return;
 }
 
-int value;
 void disableSetandLock(int n)
 {
 
     sigfillset(&disabledSigSet);
+    sigdelset(&disabledSigSet, SIGINT);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 
     if (semop(semId, &p_ops[n], 1) == -1)
@@ -107,6 +109,15 @@ void disableSetandLock(int n)
     }
 
     printf("\nabbasso %d. Valore %d\n", n, semctl(semId, n, GETVAL));
+}
+
+void enableSigSet()
+{
+    sigdelset(&disabledSigSet, SIGUSR1);
+    sigdelset(&disabledSigSet, SIGUSR2);
+    sigdelset(&disabledSigSet, SIGALRM);
+    sigdelset(&disabledSigSet, SIGTERM);
+    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
 void enableSetandUnlock(int n)
@@ -119,12 +130,7 @@ void enableSetandUnlock(int n)
     printf("alzato %d. Valore: %d\n", n, semctl(semId, n, GETVAL));
     fflush(stdout);
 
-    sigdelset(&disabledSigSet, SIGINT);
-    sigdelset(&disabledSigSet, SIGUSR1);
-    sigdelset(&disabledSigSet, SIGUSR2);
-    sigdelset(&disabledSigSet, SIGALRM);
-    sigdelset(&disabledSigSet, SIGTERM);
-    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
+    enableSigSet();
 }
 
 void sendMessage(char *msg, int who1, int who2)
@@ -173,7 +179,6 @@ void sendMessage(char *msg, int who1, int who2)
     }
 
     memset(message.Text, 0, sizeof(message.Text));
-
     return;
 }
 
@@ -232,126 +237,6 @@ void sigHandler(int signal) // #TODO
 
                 // #TODO qui controllo per la partita contro CPU
             }
-            else // è una mossa
-            {
-                alarm(0);
-                if (memPointer->table[memPointer->move / 3][memPointer->move % 3] != ' ')
-                {
-                    if (memPointer->onGame == 1)
-                    {
-                        if (memPointer->current == memPointer->Client1)
-                        {
-                            // enableSetandUnlock(2);
-                            // sendMessage("Tocca a Te!\nScegli la tua mossa: ", 0, 1);
-                            kill(memPointer->Client2, SIGUSR1);
-                        }
-                        else if (memPointer->current == memPointer->Client2)
-                        {
-                            // enableSetandUnlock(1);
-                            // sendMessage("Tocca a Te!\nScegli la tua mossa: ", 1, 0);
-                            kill(memPointer->Client1, SIGUSR1);
-                        }
-                        else
-                        {
-                            perror("current turn unclear");
-                        }
-                        // alarm(timeOut);
-                    }
-                }
-                else
-                {
-                    // compilo la matrice
-                    if (memPointer->move != -1)
-                    {
-                        if (memPointer->current == memPointer->Client1)
-                        {
-                            memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol1;
-                        }
-                        else if (memPointer->current == memPointer->Client2)
-                        {
-                            memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol2;
-                        }
-                        else
-                        {
-                            perror("current turn unvalid");
-                        }
-                        printf("%d, %d. Turno di %d.   (%d  -  %d)\n", memPointer->move / 3, memPointer->move % 3, memPointer->current, memPointer->Client1, memPointer->Client2);
-                        fflush(stdout);
-                    }
-                    else
-                    {
-                        if (memPointer->current == memPointer->Client1)
-                        {
-                            enableSetandUnlock(2);
-                            sendMessage("Mossa non valida. Turno perso.\n", 1, 0);
-                        }
-                        else if (memPointer->current == memPointer->Client2)
-                        {
-                            enableSetandUnlock(1);
-                            sendMessage("Mossa non valida. Turno perso.\n", 0, 1);
-                        }
-                    }
-
-                    // controllo potenziale vittoria/fine partita
-                    for (int i = 0; i < 3; i++)
-                    {
-                        if ((memPointer->table[i][0] == memPointer->table[i][1] && memPointer->table[i][1] == memPointer->table[i][2] && (!memPointer->table[i][1] == ' ')) || (memPointer->table[0][i] == memPointer->table[1][i] && memPointer->table[1][i] == memPointer->table[2][i] && (memPointer->table[1][i] != ' ')))
-                        {
-
-                            if (memPointer->current == memPointer->Client1)
-                            {
-                                sendMessage("Partita conclusa. Vince il giocatore 1.\n", 1, 1);
-                            }
-                            else
-                            {
-                                sendMessage("Partita conclusa. Vince il giocatore 2.\n", 1, 1);
-                            }
-                            memPointer->onGame = 0;
-                            delay = 0;
-                            enableSetandUnlock(0);
-                            enableSetandUnlock(1);
-                            enableSetandUnlock(2);
-                            return;
-                        }
-                    }
-                    if ((memPointer->table[0][0] == memPointer->table[1][1] && memPointer->table[2][2] == memPointer->table[1][1] && memPointer->table[1][1] != ' ') || memPointer->table[0][2] == memPointer->table[1][1] && memPointer->table[2][0] == memPointer->table[1][1] && !(memPointer->table[1][1] == ' '))
-                    {
-                        if (memPointer->current == memPointer->Client1)
-                        {
-                            sendMessage("Partita conclusa. Vince il giocatore 1.\n", 1, 1);
-                        }
-                        else
-                        {
-                            sendMessage("Partita conclusa. Vince il giocatore 2.\n", 1, 1);
-                        }
-                        memPointer->onGame = 0;
-                        delay = 0;
-                        enableSetandUnlock(0);
-                        enableSetandUnlock(1);
-                        enableSetandUnlock(2);
-                        return;
-                    }
-
-                    if (memPointer->onGame == 1)
-                    {
-                        if (memPointer->current == memPointer->Client1)
-                        {
-                            // enableSetandUnlock(2);
-                            sendMessage("Tocca a Te!\nScegli la tua mossa: ", 0, 1);
-                        }
-                        else if (memPointer->current == memPointer->Client2)
-                        {
-                            //     enableSetandUnlock(1);
-                            sendMessage("Tocca a Te!\nScegli la tua mossa: ", 1, 0);
-                        }
-                        else
-                        {
-                            perror("current turn unclear");
-                        }
-                        // alarm(timeOut);
-                    }
-                }
-            }
             enableSetandUnlock(0);
         }
         else if (signal == SIGUSR2) // il client 2 comunica l'arrivo e l'uscita + gestione inizio partita
@@ -366,12 +251,14 @@ void sigHandler(int signal) // #TODO
                 printf("Entrambi i giocatori Individuati.\n");
                 fflush(stdout);
                 memPointer->move = timeOut; // #TODO togli
+                memPointer->current = memPointer->Client1;
                 // #TODO il Server deve informare dei simboli per i giocatori
 
                 sendMessage("Entrambi i giocatori sono stati individuati. Partita avviata.\nCominci tu, giocatore 1. Scegli la tua mossa: ", 1, 0);
                 sendMessage("Entrambi i giocatori sono stati individuati. Partita avviata.\n", 0, 1);
+                // kill(memPointer->Client1, SIGUSR2);
+                // kill(memPointer->Client2, SIGUSR2);
             }
-
             enableSetandUnlock(0);
         }
         else if (signal == SIGTERM)
@@ -436,104 +323,98 @@ int main(int argc, char *argv[])
 
     // Predisposizione memoria condivisa, code di messaggi, semafori e segnali ---------------------------------------//
     size_t size = sizeof(shMem);
-
-    shmId = shmget(ftok("./TriServer.c", 's'), size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR); // #TODO gestisci errore con errno EEXIST
-    if (errno == EEXIST)
     {
-        perror("Shared Memory existance error");
-        printf("Deleting...\n");
-        shmId = shmget(ftok("./TriServer.c", 's'), size, S_IRUSR | S_IWUSR);
-        if (shmctl(shmId, IPC_RMID, NULL) < 0)
+        shmId = shmget(ftok("./TriServer.c", 's'), size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR); // #TODO gestisci errore con errno EEXIST
+        if (errno == EEXIST)
         {
-            perror("Shared Memory Cancellation Error");
+            perror("Shared Memory existance error");
+            printf("Deleting...\n");
+            shmId = shmget(ftok("./TriServer.c", 's'), size, S_IRUSR | S_IWUSR);
+            if (shmctl(shmId, IPC_RMID, NULL) < 0)
+            {
+                perror("Shared Memory Cancellation Error");
+            }
         }
-    }
-    else if (shmId < 0)
-    {
-        perror("Shared Memory creation error");
-        closure();
-    }
-
-    memPointer = shmat(shmId, NULL, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR); // #TODO qui e nel client ho sbagliato forse coi permessi
-    if (memPointer == (void *)-1)
-    {
-        perror("Shared Memory Attachment Error");
-        closure();
-    }
-
-    msgId = msgget(ftok("./TriServer.c", 's'), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    if (errno == EEXIST)
-    {
-        perror("Message Queue Already present");
-        printf("Deleting...\n");
-        fflush(stdout);
-        msgId = msgget(ftok("./TriServer.c", 's'), S_IRUSR | S_IWUSR);
-        if (msgctl(msgId, IPC_RMID, NULL) < 0)
+        else if (shmId < 0)
         {
-            perror("Message Queue Elimination Error");
+            perror("Shared Memory creation error");
+            closure();
         }
-    }
-    else if (msgId < 0)
-    {
-        perror("Message Queue creation Error");
-        closure();
-    }
 
-    semId = semget(ftok("./TriServer.c", 's'), 3, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    if (errno == EEXIST)
-    {
-        perror("Semaphore Already Existing");
-        printf("Deleting...\n");
-        fflush(stdout);
-        semId = semget(ftok("./TriServer.c", 's'), 3, S_IRUSR | S_IWUSR);
-        if (semctl(semId, 0, IPC_RMID) < 0)
+        memPointer = shmat(shmId, NULL, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR); // #TODO qui e nel client ho sbagliato forse coi permessi
+        if (memPointer == (void *)-1)
         {
-            perror("Semaphores Elimination Error");
+            perror("Shared Memory Attachment Error");
+            closure();
         }
-        return -1;
+
+        msgId = msgget(ftok("./TriServer.c", 's'), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+        if (errno == EEXIST)
+        {
+            perror("Message Queue Already present");
+            printf("Deleting...\n");
+            fflush(stdout);
+            msgId = msgget(ftok("./TriServer.c", 's'), S_IRUSR | S_IWUSR);
+            if (msgctl(msgId, IPC_RMID, NULL) < 0)
+            {
+                perror("Message Queue Elimination Error");
+            }
+        }
+        else if (msgId < 0)
+        {
+            perror("Message Queue creation Error");
+            closure();
+        }
+
+        semId = semget(ftok("./TriServer.c", 's'), semNum, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+        if (errno == EEXIST)
+        {
+            perror("Semaphore Already Existing");
+            printf("Deleting...\n");
+            fflush(stdout);
+            semId = semget(ftok("./TriServer.c", 's'), semNum, S_IRUSR | S_IWUSR);
+            if (semctl(semId, 0, IPC_RMID) < 0)
+            {
+                perror("Semaphores Elimination Error");
+            }
+            return -1;
+        }
+        else if (semId < 0)
+        {
+            perror("semaphore's ID creation Error");
+            closure();
+        }
+        struct semid_ds dataStruct;
+        mySU semArgs;
+        semArgs.dataStruct = &dataStruct;
+        unsigned short values[] = {1, 1, 0, 0};
+        semArgs.array = values;
+
+        for (int i = 0; i < semNum; i++)
+        {
+            p_ops[i].sem_num = i;
+            p_ops[i].sem_op = -1;
+            p_ops[i].sem_flg = 0;
+
+            v_ops[i].sem_num = i;
+            v_ops[i].sem_op = 1;
+            v_ops[i].sem_flg = 0;
+        }
+
+        if (semctl(semId, 0, SETALL, semArgs) < 0)
+        {
+            perror("Server Semaphore value association Error");
+            closure();
+        }
+
+        sigfillset(&disabledSigSet);
+        enableSigSet();
+        signal(SIGINT, sigHandler);
+        signal(SIGUSR1, sigHandler);
+        signal(SIGUSR2, sigHandler);
+        signal(SIGALRM, sigHandler);
+        signal(SIGTERM, sigHandler);
     }
-    else if (semId < 0)
-    {
-        perror("semaphore's ID creation Error");
-        closure();
-    }
-    struct semid_ds dataStruct;
-    mySU semArgs;
-    semArgs.dataStruct = &dataStruct;
-    unsigned short values[] = {1, 1, 0};
-    semArgs.array = values;
-
-    for (int i = 0; i < 3; i++)
-    {
-        p_ops[i].sem_num = i;
-        p_ops[i].sem_op = -1;
-        p_ops[i].sem_flg = 0;
-
-        v_ops[i].sem_num = i;
-        v_ops[i].sem_op = 1;
-        v_ops[i].sem_flg = 0;
-    }
-
-    if (semctl(semId, 0, SETALL, semArgs) < 0)
-    {
-        perror("Server Semaphore value association Error");
-        closure();
-    }
-
-    sigfillset(&disabledSigSet);
-    sigdelset(&disabledSigSet, SIGINT);
-    sigdelset(&disabledSigSet, SIGUSR1);
-    sigdelset(&disabledSigSet, SIGUSR2);
-    sigdelset(&disabledSigSet, SIGALRM);
-    sigdelset(&disabledSigSet, SIGTERM); // uso per informare che è avvenuta la pressione del doppio control c
-
-    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
-    signal(SIGINT, sigHandler);
-    signal(SIGUSR1, sigHandler);
-    signal(SIGUSR2, sigHandler);
-    signal(SIGALRM, sigHandler);
-    signal(SIGTERM, sigHandler);
-
     //----------------------------------------------------------------------------------------//
 
     // corpo del codice ------------------------------------------------------------------#TODO
@@ -570,13 +451,152 @@ int main(int argc, char *argv[])
         enableSetandUnlock(0);
         pause();
         disableSetandLock(0);
-    } while ((memPointer->Client2 == -12 && memPointer->Client1 == -11) && delay != 0);
+    } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11) && delay != 0);
     // altrimenti, se il valore -12 è stato sistituito, si è trovato il giocatore 2
     enableSetandUnlock(0);
 
     while (delay != 0)
     {
-        pause();
+        printf("--------------\n\n");
+        disableSetandLock(3);
+        // mossa
+        {
+            // alarm(0);
+            if (memPointer->move != -1)
+            {
+                // compilo la matrice
+                if (memPointer->table[memPointer->move / 3][memPointer->move % 3] == ' ')
+                {
+                    if (memPointer->current == memPointer->Client1)
+                    {
+                        memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol1;
+                    }
+                    else if (memPointer->current == memPointer->Client2)
+                    {
+                        memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol2;
+                    }
+                    else
+                    {
+                        perror("current turn unpredicted");
+                        closure();
+                    }
+
+                    for (int i = 0; i < 3; i++)
+                    {
+                        if (((memPointer->table[i][0] == symbol1) && (memPointer->table[i][0] == memPointer->table[i][1] && memPointer->table[i][1] == memPointer->table[i][2])) || ((memPointer->table[0][i] == symbol1) && (memPointer->table[0][i] == memPointer->table[1][i] && memPointer->table[2][i] == memPointer->table[2][i])))
+                        {
+                            memPointer->onGame = 0;
+                            delay = 0;
+                            enableSetandUnlock(1);
+                            enableSetandUnlock(2);
+                            sendMessage("Il giocatore 1 ha vinto la partita.\n", 1, 1);
+                        }
+                        else if (((memPointer->table[i][0] == symbol2) && (memPointer->table[i][0] == memPointer->table[i][1] && memPointer->table[i][1] == memPointer->table[i][2])) || ((memPointer->table[0][i] == symbol2) && (memPointer->table[0][i] == memPointer->table[1][i] && memPointer->table[2][i] == memPointer->table[2][i])))
+                        {
+                            memPointer->onGame = 0;
+                            delay = 0;
+                            enableSetandUnlock(1);
+                            enableSetandUnlock(2);
+                            sendMessage("Il giocatore 2 ha vinto la partita.\n", 1, 1);
+                        }
+                    }
+                    if (memPointer->onGame == 1)
+                    {
+                        if ((memPointer->table[1][1] == symbol1) && ((memPointer->table[0][0] == memPointer->table[1][1] && memPointer->table[2][2] == memPointer->table[1][1]) || (memPointer->table[2][0] == memPointer->table[1][1] && memPointer->table[0][2] == memPointer->table[1][1])))
+                        {
+                            memPointer->onGame = 0;
+                            delay = 0;
+                            enableSetandUnlock(1);
+                            enableSetandUnlock(2);
+                            sendMessage("Il giocatore 1 ha vinto la partita.\n", 1, 1);
+                        }
+                        else if ((memPointer->table[1][1] == symbol2) && ((memPointer->table[0][0] == memPointer->table[1][1] && memPointer->table[2][2] == memPointer->table[1][1]) || (memPointer->table[2][0] == memPointer->table[1][1] && memPointer->table[0][2] == memPointer->table[1][1])))
+                        {
+                            memPointer->onGame = 0;
+                            delay = 0;
+                            enableSetandUnlock(1);
+                            enableSetandUnlock(2);
+                            sendMessage("Il giocatore 2 ha vinto la partita.\n", 1, 1);
+                        }
+                        else
+                        {
+                            if (memPointer->current == memPointer->Client1)
+                            {
+                                sendMessage("Mossa eseguita correttamente.\n", 1, 0);
+                            }
+                            else if (memPointer->current == memPointer->Client2)
+                            {
+                                sendMessage("Mossa eseguita correttamente.\n", 0, 1);
+                            }
+                            else
+                            {
+                                perror("Current turn unpredicted");
+                            }
+                        }
+                    }
+                }
+                else // hai sbagliato a scegliere la casella
+                {
+                    if (memPointer->current == memPointer->Client1)
+                    {
+                        sendMessage("La casella selezionata è già occupata.\n", 1, 0);
+                    }
+                    else if (memPointer->current == memPointer->Client2)
+                    {
+                        sendMessage("La casella selezionata è già occupata.\n", 0, 1);
+                    }
+                    else
+                    {
+                        perror("current turn unpredicted");
+                        closure();
+                    }
+                }
+            }
+            else
+            {
+                // penitenza
+                if (memPointer->Client1 == memPointer->current)
+                {
+                    sendMessage("Mossa invalida, turno perso.\n", 1, 0);
+                }
+                else if (memPointer->Client2 == memPointer->current)
+                {
+                    sendMessage("Mossa invalida, turno perso\n", 0, 1);
+                }
+                else
+                {
+                    perror("unpredicted pid in current turn");
+                }
+            }
+        }
+
+        printf("Changing turn");
+        if (memPointer->current == memPointer->Client1)
+        {
+            printf(" to 2. Sono %d e current: %d\n", memPointer->Client1, memPointer->current);
+            fflush(stdout);
+            sendMessage("Tocca a te!", 0, 1);
+            if (semop(semId, &v_ops[2], 1) < 0)
+            {
+                perror("C2 turn concession Error");
+                closure();
+            }
+        }
+        else if (memPointer->current == memPointer->Client2)
+        {
+            printf(" to 1. Sono %d e current: %d\n", memPointer->Client2, memPointer->current);
+            fflush(stdout);
+            sendMessage("Tocca a te!", 1, 0);
+            if (semop(semId, &v_ops[1], 1) < 0)
+            {
+                perror("C1 turn concession Error");
+                closure();
+            }
+        }
+        else
+        {
+            perror("Current turn unclear");
+        }
 
         // system('clear');
     }

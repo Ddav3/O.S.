@@ -15,13 +15,15 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#define semNum 4
+
 // variabili globali --------------------------------------------------------------//
 
 sigset_t disabledSigSet;
 int shmId = -3, semId = -4, msgId = -5;
 char *name, choice[1];
-struct sembuf p_ops[3];
-struct sembuf v_ops[3];
+struct sembuf p_ops[semNum];
+struct sembuf v_ops[semNum];
 int c1, c2, s;
 
 typedef union semUnion
@@ -86,6 +88,7 @@ void disableSetandLock(int n)
 {
 
     sigfillset(&disabledSigSet);
+    sigdelset(&disabledSigSet, SIGINT);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 
     if (semop(semId, &p_ops[n], 1) == -1)
@@ -97,6 +100,15 @@ void disableSetandLock(int n)
     }
 }
 
+void enableSigSet()
+{
+    sigdelset(&disabledSigSet, SIGUSR1);
+    sigdelset(&disabledSigSet, SIGUSR2);
+    sigdelset(&disabledSigSet, SIGALRM);
+    sigdelset(&disabledSigSet, SIGTERM);
+    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
+}
+
 void enableSetandUnlock(int n)
 {
     if (semop(semId, &v_ops[n], 1) == -1)
@@ -106,12 +118,7 @@ void enableSetandUnlock(int n)
         closure();
     }
 
-    sigdelset(&disabledSigSet, SIGINT);
-    sigdelset(&disabledSigSet, SIGUSR1);
-    sigdelset(&disabledSigSet, SIGUSR2);
-    sigdelset(&disabledSigSet, SIGALRM);
-    sigdelset(&disabledSigSet, SIGTERM);
-    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
+    enableSigSet();
 }
 
 void receiveMessage()
@@ -127,7 +134,7 @@ void receiveMessage()
 void sigHandlerC(int signal) // #TODO
 {
 
-    if (signal == SIGINT)
+    if (signal == SIGINT) // #TODO sistema in modo da evitare i segmentation fault
     {
         printf("Abbandono della partita in corso...\n");
         fflush(stdout);
@@ -139,20 +146,7 @@ void sigHandlerC(int signal) // #TODO
     else if (signal == SIGUSR1) //
     {
         disableSetandLock(0);
-        if (memPointer->Client1 == getpid())
-        {
-            printf("Tocca a te, giocatore 1. Scegli la tua mossa: ");
-            fflush(stdout);
-        }
-        else if (memPointer->Client2 == getpid())
-        {
-            printf("Tocca a te, giocatore 2. Scegli la tua mossa: ");
-            fflush(stdout);
-        }
-        else
-        {
-            perror("pid not present");
-        }
+
         enableSetandUnlock(0);
     }
     else if (signal == SIGUSR2) // è arrivato un messaggio
@@ -183,6 +177,7 @@ void sigHandlerC(int signal) // #TODO
     }
     else
     {
+        perror("Signal not handled");
     }
     return;
 }
@@ -231,7 +226,6 @@ void makeMove()
         memPointer->move = (choice[0] - '0') - 1;
     }
 
-    kill(memPointer->Server, SIGUSR1);
     enableSetandUnlock(0);
 }
 
@@ -298,14 +292,14 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    semId = semget(ftok("./TriServer.c", 's'), 3, S_IRUSR | S_IWUSR);
+    semId = semget(ftok("./TriServer.c", 's'), semNum, S_IRUSR | S_IWUSR);
     if (semId < 0)
     {
         perror("Semaphore ID creation Error");
         return -1;
     }
 
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < semNum; i++)
     {
         p_ops[i].sem_num = i;
         p_ops[i].sem_op = -1;
@@ -317,18 +311,13 @@ int main(int argc, char *argv[])
     }
 
     sigfillset(&disabledSigSet);
-    sigdelset(&disabledSigSet, SIGINT);
-    sigdelset(&disabledSigSet, SIGUSR1);
-    sigdelset(&disabledSigSet, SIGUSR2);
-    sigdelset(&disabledSigSet, SIGALRM);
-    sigdelset(&disabledSigSet, SIGTERM);
-    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
+    enableSigSet();
     signal(SIGINT, sigHandlerC);
     signal(SIGUSR1, sigHandlerC);
     signal(SIGUSR2, sigHandlerC);
     signal(SIGALRM, sigHandlerC);
     signal(SIGTERM, sigHandlerC); // userò questo segnale per informare della fine della partita
-                                  //----------------------------------------------------------------------------------//
+    //----------------------------------------------------------------------------------//
 
     // blocco di codice #TODO ----------------------------------------------------------//
     printf("Process Pid: %d\n", getpid());
@@ -349,26 +338,57 @@ int main(int argc, char *argv[])
         }
         else
         {
-            kill(memPointer->Server, SIGUSR1);
-            enableSetandUnlock(0);
-            printf("In attesa di un secondo giocatore...\n");
-            fflush(stdout);
-            pause();
+            {
+                kill(memPointer->Server, SIGUSR1);
+                enableSetandUnlock(0);
+                printf("In attesa di un secondo giocatore...\n");
+                fflush(stdout);
+                pause();
+            }
 
             disableSetandLock(0);
             while (memPointer->onGame == 1)
             {
+                enableSetandUnlock(0);
+                disableSetandLock(1);
+
+                enableSigSet();
+
+                showMatrix();
+
+                disableSetandLock(0);
+                if (memPointer->onGame == 1)
+                {
+                    memPointer->current == getpid();
+                    enableSetandUnlock(0);
+                    while (read(0, choice, 1) < 0)
+                    {
+                        perror("Reading error");
+                    }
+                    makeMove();
+
+                    if (semop(semId, &v_ops[3], 1) < 0)
+                    {
+                        perror("V op. on Server Semaphore error");
+                        closure();
+                    }
+                    pause();
+
+                    disableSetandLock(0);
+                }
             }
             enableSetandUnlock(0);
         }
     }
     else if (memPointer->Client2 == -12)
     {
-        memPointer->Client2 = getpid();
-        receiver.Type = 2;
-        kill(memPointer->Server, SIGUSR2);
-        enableSetandUnlock(0);
-        pause();
+        {
+            memPointer->Client2 = getpid();
+            receiver.Type = 2;
+            enableSetandUnlock(0);
+            kill(memPointer->Server, SIGUSR2);
+            pause();
+        }
 
         disableSetandLock(0);
         while (memPointer->onGame == 1)
@@ -376,22 +396,30 @@ int main(int argc, char *argv[])
             enableSetandUnlock(0);
             disableSetandLock(2);
 
+            enableSigSet();
+
+            showMatrix();
+
             disableSetandLock(0);
-            if (memPointer->onGame != 0)
+            if (memPointer->onGame == 1)
             {
                 memPointer->current = getpid();
                 enableSetandUnlock(0);
-                showMatrix();
 
-                if (read(0, choice, 1) < 0)
+                while (read(0, choice, 1) < 0)
                 {
-                    printf("Errore nella lettura.\n");
-                    fflush(stdout);
+                    perror("Errore in lettura");
                 }
                 makeMove();
+
+                if (semop(semId, &v_ops[3], 1) < 0)
+                {
+                    perror("V op. on Server Semaphore error");
+                    closure();
+                }
+                pause();
                 disableSetandLock(0);
             }
-            enableSetandUnlock(1);
         }
         enableSetandUnlock(0);
     }
@@ -406,46 +434,6 @@ int main(int argc, char *argv[])
     // Abbandono con CTRL C + notifica altro giocatore
     // Time out per mossa + conseguenze
     // Modalità automatica (1 o 2 player)
-
-    // disableSetandLock(0);
-    // while (memPointer->onGame == 1)
-    // {
-    //     if (memPointer->Client1 == getpid())
-    //     {
-    //         enableSetandUnlock(0);
-    //         printf("\n%d\n", getpid());
-    //         fflush(stdout);
-    //         disableSetandLock(1);
-    //     }
-    //     else if (memPointer->Client2 == getpid())
-    //     {
-    //         enableSetandUnlock(0);
-    //         printf("\n%d\n", getpid());
-    //         fflush(stdout);
-    //         disableSetandLock(2);
-    //     }
-    //     else
-    //     {
-    //         enableSetandUnlock(0);
-    //         perror("Unrecognized pid error");
-    //         closure();
-    //     }
-    //     showMatrix();
-    //     disableSetandLock(0);
-    //     if (memPointer->onGame != 0)
-    //     {
-    //         memPointer->current = getpid();
-    //         enableSetandUnlock(0);
-    //         if (read(0, choice, 1) < 0)
-    //         {
-    //             printf("Errore nella lettura.\n");
-    //             fflush(stdout);
-    //         }
-    //         makeMove();
-    //         disableSetandLock(0);
-    //     }
-    // }
-    // enableSetandUnlock(0);
 
     //------------------------------------------------------------------//
     closure();
