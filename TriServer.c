@@ -135,6 +135,8 @@ void enableSetandUnlock(int n)
 
 void sendMessage(char *msg, int who1, int who2)
 {
+
+    disableSetandLock(0);
     memcpy(message.Text, msg, strlen(msg) + 1);
 
     if (who1 == 1)
@@ -179,6 +181,7 @@ void sendMessage(char *msg, int who1, int who2)
     }
 
     memset(message.Text, 0, sizeof(message.Text));
+    enableSetandUnlock(0);
     return;
 }
 
@@ -503,6 +506,8 @@ int main(int argc, char *argv[])
                         {
                             memPointer->onGame = 0;
                             delay = 0;
+                            printf("Vince: %d\n", memPointer->Client1);
+                            fflush(stdout);
                             enableSetandUnlock(1);
                             enableSetandUnlock(2);
                             sendMessage("Il giocatore 1 ha vinto la partita.\n", 1, 1);
@@ -511,6 +516,9 @@ int main(int argc, char *argv[])
                         {
                             memPointer->onGame = 0;
                             delay = 0;
+
+                            printf("Vince: %d\n", memPointer->Client2);
+                            fflush(stdout);
                             enableSetandUnlock(1);
                             enableSetandUnlock(2);
                             sendMessage("Il giocatore 2 ha vinto la partita.\n", 1, 1);
@@ -571,8 +579,6 @@ int main(int argc, char *argv[])
         disableSetandLock(0);
         if (memPointer->current == memPointer->Client1)
         {
-            printf(" to 2. Sono %d e current: %d\n", memPointer->Client1, memPointer->current);
-            fflush(stdout);
             sendMessage("Tocca a te!", 0, 1);
             if (semop(semId, &v_ops[2], 1) < 0)
             {
@@ -582,8 +588,6 @@ int main(int argc, char *argv[])
         }
         else if (memPointer->current == memPointer->Client2)
         {
-            printf(" to 1. Sono %d e current: %d\n", memPointer->Client2, memPointer->current);
-            fflush(stdout);
             sendMessage("Tocca a te!", 1, 0);
             if (semop(semId, &v_ops[1], 1) < 0)
             {

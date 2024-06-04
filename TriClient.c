@@ -21,10 +21,10 @@
 
 sigset_t disabledSigSet;
 int shmId = -3, semId = -4, msgId = -5;
-char *name, choice[1];
+char *name, choice[10];
 struct sembuf p_ops[semNum];
 struct sembuf v_ops[semNum];
-int c1, c2, s;
+int c1, c2, s = 0; // s viene anche usata temporaneamente come flag
 
 typedef union semUnion
 {
@@ -91,7 +91,7 @@ void disableSetandLock(int n)
     sigdelset(&disabledSigSet, SIGINT);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 
-    if (semop(semId, &p_ops[n], 1) == -1)
+    if (semop(semId, &p_ops[n], 1) < 0)
     {
         printf("C%d) ", n);
         fflush(stdout);
@@ -109,77 +109,21 @@ void enableSigSet()
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
+int count = 0; // debug
 void enableSetandUnlock(int n)
 {
-    if (semop(semId, &v_ops[n], 1) == -1)
+    if (n == 3)
     {
-        printf("C%d) ", n);
+        count++;
+    }
+    if (semop(semId, &v_ops[n], 1) < 0)
+    {
+        printf("C%d) Count: %d", n, count);
         perror("Error in Semaphore V Operation");
         closure();
     }
 
     enableSigSet();
-}
-
-void receiveMessage()
-{
-    if (msgrcv(msgId, &receiver, msgSize, receiver.Type, 0) < 0)
-    {
-        perror("Message reception Error");
-        return;
-    }
-    write(1, receiver.Text, msgSize);
-}
-
-void sigHandlerC(int signal) // #TODO
-{
-
-    if (signal == SIGINT) // #TODO sistema in modo da evitare i segmentation fault
-    {
-        printf("Abbandono della partita in corso...\n");
-        fflush(stdout);
-        disableSetandLock(0);
-        memPointer->move = getpid();
-        kill(memPointer->Server, SIGTERM);
-        enableSetandUnlock(0);
-    }
-    else if (signal == SIGUSR1) //
-    {
-        disableSetandLock(0);
-
-        enableSetandUnlock(0);
-    }
-    else if (signal == SIGUSR2) // è arrivato un messaggio
-    {
-        receiveMessage();
-    }
-
-    else if (signal == SIGTERM) // c'è un abbandono #TODO gestisci i casi per non mischiarli
-    {
-
-        // #TODO valuta di migliorare qua sotto
-
-        disableSetandLock(0);
-        if (memPointer->onGame == 0)
-        {
-            c1 = memPointer->Client1;
-            c2 = memPointer->Client2;
-            s = memPointer->Server;
-        }
-        else
-        {
-        }
-        enableSetandUnlock(0);
-        closure();
-    }
-    else if (signal == SIGALRM)
-    {
-    }
-    else
-    {
-        perror("Signal not handled");
-    }
-    return;
 }
 
 void showMatrix()
@@ -213,10 +157,80 @@ void showMatrix()
     enableSetandUnlock(0);
 }
 
+void receiveMessage()
+{
+    if (msgrcv(msgId, &receiver, msgSize, receiver.Type, 0) < 0)
+    {
+        perror("Message reception Error");
+        return;
+    }
+    write(1, receiver.Text, msgSize);
+}
+
+void sigHandlerC(int signal) // #TODO
+{
+
+    if (signal == SIGINT) // #TODO sistema in modo da evitare i segmentation fault
+    {
+        printf("Abbandono della partita in corso...\n");
+        fflush(stdout);
+        disableSetandLock(0);
+        memPointer->move = getpid();
+        kill(memPointer->Server, SIGTERM);
+        enableSetandUnlock(0);
+    }
+    else if (signal == SIGUSR1) //
+    {
+        }
+    else if (signal == SIGUSR2) // è arrivato un messaggio
+    {
+        receiveMessage();
+
+        if (s == 1)
+        {
+            showMatrix();
+        }
+        else
+        {
+            if (memPointer->Client1 == getpid())
+            {
+                showMatrix();
+            }
+            s++;
+        }
+    }
+
+    else if (signal == SIGTERM) // c'è un abbandono #TODO gestisci i casi per non mischiarli
+    {
+
+        // #TODO valuta di migliorare qua sotto
+
+        disableSetandLock(0);
+        if (memPointer->onGame == 0)
+        {
+            c1 = memPointer->Client1;
+            c2 = memPointer->Client2;
+            s = memPointer->Server;
+        }
+        else
+        {
+        }
+        enableSetandUnlock(0);
+        closure();
+    }
+    else if (signal == SIGALRM)
+    {
+    }
+    else
+    {
+        perror("Signal not handled");
+    }
+    return;
+}
+
 // funzione che esegue la mossa del singolo giocatore
 void makeMove()
 {
-    disableSetandLock(0);
     if (choice[0] < '1' || choice[0] > '9')
     {
         memPointer->move = -1;
@@ -225,8 +239,6 @@ void makeMove()
     {
         memPointer->move = (choice[0] - '0') - 1;
     }
-
-    enableSetandUnlock(0);
 }
 
 // Funzione dedicata alla stampa delle stringhe #TODO
@@ -351,18 +363,16 @@ int main(int argc, char *argv[])
             {
                 enableSetandUnlock(0);
                 disableSetandLock(1);
+                // system("clear"); #TODO gestisci eventualmente per lo stile
 
                 enableSigSet();
-
-                showMatrix();
 
                 disableSetandLock(0);
                 if (memPointer->onGame == 1)
                 {
                     memPointer->current = getpid();
-                    printf("%d e %d\n", memPointer->current, memPointer->Client1);
                     enableSetandUnlock(0);
-                    while (read(0, choice, 1) < 0)
+                    if (read(0, choice, 9) < 0)
                     {
                         perror("Reading error");
                     }
@@ -374,6 +384,8 @@ int main(int argc, char *argv[])
                         closure();
                     }
                     pause();
+                    printf("Situazione attuale.\n");
+                    fflush(stdout);
 
                     disableSetandLock(0);
                 }
@@ -396,19 +408,17 @@ int main(int argc, char *argv[])
         {
             enableSetandUnlock(0);
             disableSetandLock(2);
+            // system("clear");
 
             enableSigSet();
-
-            showMatrix();
 
             disableSetandLock(0);
             if (memPointer->onGame == 1)
             {
                 memPointer->current = getpid();
-                printf("%d e %d\n", memPointer->current, memPointer->Client1);
 
                 enableSetandUnlock(0);
-                while (read(0, choice, 1) < 0)
+                if (read(0, choice, 9) < 0) // la read mi prende l'a capo #TODO
                 {
                     perror("Errore in lettura");
                 }
@@ -420,6 +430,9 @@ int main(int argc, char *argv[])
                     closure();
                 }
                 pause();
+                printf("Situazione attuale.\n");
+                fflush(stdout);
+
                 disableSetandLock(0);
             }
         }
