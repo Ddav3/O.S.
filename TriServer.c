@@ -20,7 +20,6 @@
 
 #define semNum 4
 // Variabili Globali, Strutture e Funzioni -----------------------------------------------------------//
-
 int timeOut;           // Variabile per il tempo della mossa
 char symbol1, symbol2; // simboli delle mosse
 int shmId = -2, msgId = -2, semId = -2;
@@ -40,7 +39,6 @@ typedef struct sharedMemoryStruct
 
 } shMem;
 shMem *memPointer;
-
 size_t size = sizeof(shMem);
 
 typedef union semUnion
@@ -68,6 +66,13 @@ void print(char *txt)
     }
 }
 
+void disableSigSet()
+{
+    sigfillset(&disabledSigSet);
+    sigdelset(&disabledSigSet, SIGINT);
+    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
+}
+
 void enableSigSet()
 {
     sigdelset(&disabledSigSet, SIGUSR1);
@@ -77,61 +82,57 @@ void enableSigSet()
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
+int quit = 0;
 void closure()
 {
-    kill(memPointer->Client1, SIGTERM);
-    kill(memPointer->Client2, SIGTERM);
-    while (memPointer->Client1 != -11 && memPointer->Client2 != -12) // #TODO puoi forse implementare il timer che s enon risponde lo killi
+    disableSigSet();
+    if (semop(semId, &p_ops[0], 1) == -1)
     {
-        if (semop(semId, &v_ops[0], 1) == -1)
+        perror("Error in Semaphore Operation (S, p, 50)");
+        return;
+    }
+
+    memPointer->current = -1;
+    memPointer->onGame = 1;
+
+    if (!(quit > 0))
+    {
+
+        if (memPointer->Client1 != -11)
         {
-            perror("Error in Semaphore Operation (S, v, 4)");
-            closure();
+            kill(memPointer->Client1, SIGINT);
         }
-        enableSigSet();
-
-        pause(); // se si blocca, controlla di non doverlo mettere a sleep
-
-        sigfillset(&disabledSigSet);
-        sigdelset(&disabledSigSet, SIGINT);
-        sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
-        if (semop(semId, &p_ops[0], 1) == -1)
+        if (memPointer->Client2 != -12)
         {
-            perror("Error in Semaphore Operation (S, p, 4)");
-            closure();
+            kill(memPointer->Client2, SIGINT);
+        }
+
+        while ((memPointer->Client1 != -11 || memPointer->Client2 != -12))
+        {
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (S, v, 50)");
+                return;
+            }
+            enableSigSet();
+
+            pause();
+
+            disableSigSet();
+            if (semop(semId, &p_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (S, p, 50)");
+                return;
+            }
         }
     }
+
     if (semop(semId, &v_ops[0], 1) == -1)
     {
-        perror("Error in Semaphore Operation (S, v, 5)");
-        closure();
+        perror("Error in Semaphore Operation (S, v, 51)");
+        return;
     }
 
-    if (semId != -2)
-    {
-        if (semctl(semId, 0, IPC_RMID) < 0) // #TODO
-        {
-            perror("Semaphores Elimination Error");
-        }
-    }
-    else
-    {
-    }
-    if (msgId != -2)
-    {
-        if (msgctl(msgId, IPC_RMID, NULL) < 0)
-        {
-            perror("Message Queue Elimination Error");
-        }
-    }
-
-    if (&memPointer != NULL)
-    {
-        if (shmdt(memPointer) < 0)
-        {
-            perror("Shared Memory Detachment Error");
-        }
-    }
     if (shmId != -2)
     {
 
@@ -140,15 +141,83 @@ void closure()
             perror("Shared Memory Cancellation Error");
         }
     }
+    if (&memPointer != NULL)
+    {
+        if (shmdt(memPointer) < 0)
+        {
+            perror("Shared Memory Detachment Error");
+        }
+    }
+    if (msgId != -2)
+    {
+        if (msgctl(msgId, IPC_RMID, NULL) < 0)
+        {
+            perror("Message Queue Elimination Error");
+        }
+    }
+    if (semId != -2)
+    {
+        if (semctl(semId, 0, IPC_RMID) < 0)
+        {
+            perror("Semaphores Elimination Error");
+        }
+    }
 
-    print("Chiusure eseguite\n");
+    print("Deleting...\n");
+}
+
+void sendMessage(char *msg, int who1, int who2)
+{
+    memcpy(message.Text, msg, strlen(msg) + 1);
+    if (who1 == 1)
+    {
+        message.Type = 1;
+        msgSize = sizeof(message) - sizeof(long);
+        if (msgsnd(msgId, &message, msgSize, IPC_NOWAIT) < 0)
+        {
+            if (errno == EAGAIN)
+            {
+                perror("Queue full");
+            }
+            else
+            {
+                perror("Messange sending Error");
+            }
+            return;
+        }
+        kill(memPointer->Client1, SIGUSR2);
+    }
+
+    if (who2 == 1)
+    {
+        message.Type = 2;
+        msgSize = sizeof(message) - sizeof(long);
+        if (msgsnd(msgId, &message, msgSize, IPC_NOWAIT) < 0)
+        {
+            if (errno == EAGAIN)
+            {
+                perror("Queue full");
+            }
+            else
+            {
+                perror("Messange sending Error");
+            }
+            return;
+        }
+        kill(memPointer->Client2, SIGUSR2);
+    }
+
+    if (memset(message.Text, 0, msgSize) < 0)
+    {
+        perror("Resetting Message queue Error");
+        closure();
+        return;
+    }
 }
 
 void sigHandler(int signal)
 {
-    sigfillset(&disabledSigSet);
-    sigdelset(&disabledSigSet, SIGINT);
-    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
+    disableSigSet();
     if (semop(semId, &p_ops[0], 1) == -1)
     {
         perror("Error in Semaphore Operation (S, p, 0)");
@@ -158,20 +227,23 @@ void sigHandler(int signal)
     if (signal == SIGINT)
     {
         memPointer->onGame--;
-        if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
-        {
-            if (semop(semId, &p_ops[3], 1) == -1)
-            {
-                perror("Error in Semaphore Operation (S, p3, 0)");
-                closure();
-            }
-        }
     }
     else
     {
         memPointer->onGame = 3;
-        if (signal == SIGALRM)
+        if (signal == SIGUSR1)
         {
+            if (memPointer->current == -1)
+            {
+                if (memPointer->Client2 != -12)
+                {
+                    print("Giocatore 2 individuato.\n");
+                }
+                else if (memPointer->Client1 != -11)
+                {
+                    print("Giocatore 1 individuato.\n");
+                }
+            }
         }
     }
 
@@ -212,121 +284,111 @@ int main(int argc, char *argv[])
     symbol2 = argv[3][0];
     //--------------------------------------------------------------------------------//
 
-    // Predisposizione Memoria Condivisa, code di Messaggi, semafori e segnali -----------//  #TODO vedi se migliorare le chiusure
+    // Predisposizione Memoria Condivisa, code di Messaggi, semafori e segnali -----------//
+    shmId = shmget(ftok("./TriServer.c", 's'), size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (shmId < 0)
     {
-        semId = semget(ftok("./TriServer.c", 's'), semNum, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-        if (semId < 0)
+        if (errno == EEXIST)
         {
-            if (errno == EEXIST)
-            {
-                print("Semaphore Already Existing. Deleting...\n");
-                semId = semget(ftok("./TriServer.c", 's'), semNum, S_IRUSR | S_IWUSR);
-                if (semctl(semId, 0, IPC_RMID) < 0)
-                {
-                    perror("Semaphores Elimination Error");
-                }
-            }
-            else
-            {
-                perror("Semaphore's ID creation Error");
-            }
-            closure();
+            perror("Shared Memory Already Existing");
+            shmId = shmget(ftok("./TriServer.c", 's'), size, S_IRUSR | S_IWUSR);
+            quit++;
         }
-
-        struct semid_ds dataStruct;
-        mySU semArgs;
-        semArgs.dataStruct = &dataStruct;
-        unsigned short values[] = {1, 1, 0, 0};
-        semArgs.array = values;
-
-        for (int i = 0; i < semNum; i++)
+        else
         {
-            p_ops[i].sem_num = i;
-            p_ops[i].sem_op = -1;
-            p_ops[i].sem_flg = 0;
 
-            v_ops[i].sem_num = i;
-            v_ops[i].sem_op = 1;
-            v_ops[i].sem_flg = 0;
+            perror("Shared Memory creation error");
         }
-
-        if (semctl(semId, 0, SETALL, semArgs) < 0)
-        {
-            perror("Server Semaphore Value Association Error");
-            closure();
-        }
-
-        shmId = shmget(ftok("./TriServer.c", 's'), size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-        if (shmId < 0)
-        {
-            if (errno == EEXIST)
-            {
-                // #TODO qui devi gestire il semaforo in modo che appena creato, controlli se c'è una partita in corso, se c'è
-                // esci, se c'è memoria condivisa ma la partita non è in corso, la togli
-                perror("Shared Memory existance error");
-                printf("Deleting...\n");
-                shmId = shmget(ftok("./TriServer.c", 's'), size, S_IRUSR | S_IWUSR);
-                if (shmctl(shmId, IPC_RMID, NULL) < 0)
-                {
-                    perror("Shared Memory Cancellation Error");
-                }
-            }
-            perror("Shared Memory Id Creation error");
-        }
-
-        memPointer = shmat(shmId, NULL, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR); // #TODO qui e nel client ho sbagliato forse coi permessi
-        if (memPointer == (void *)-1)
-        {
-            perror("Shared Memory Attachment Error");
-            closure();
-            return 0;
-        }
-
-        msgId = msgget(ftok("./TriServer.c", 's'), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-
-        if (msgId < 0)
-        {
-            if (errno == EEXIST)
-            {
-                perror("Message Queue Already present");
-                printf("Deleting...\n");
-                fflush(stdout);
-                msgId = msgget(ftok("./TriServer.c", 's'), S_IRUSR | S_IWUSR);
-                if (msgctl(msgId, IPC_RMID, NULL) < 0)
-                {
-                    perror("Message Queue Elimination Error");
-                }
-            }
-            else
-            {
-                perror("Message Queue creation Error");
-            }
-            closure();
-            return 0;
-        }
-
-        sigfillset(&disabledSigSet);
-        sigdelset(&disabledSigSet, SIGINT);
-        enableSigSet();
-        signal(SIGINT, sigHandler);
-        signal(SIGUSR1, sigHandler);
-        signal(SIGUSR2, sigHandler);
-        signal(SIGALRM, sigHandler);
-        signal(SIGTERM, sigHandler);
     }
+
+    memPointer = shmat(shmId, NULL, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (memPointer == (void *)-1)
+    {
+        perror("Shared Memory Attachment Error");
+        if (memPointer->onGame == 1)
+        {
+            print("Partita in corso.\n");
+        }
+        quit++;
+    }
+
+    msgId = msgget(ftok("./TriServer.c", 's'), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (msgId < 0)
+    {
+        if (errno == EEXIST)
+        {
+            perror("Message Queue Already present");
+            msgId = msgget(ftok("./TriServer.c", 's'), S_IRUSR | S_IWUSR);
+
+            quit++;
+        }
+        else
+        {
+            perror("Message Queue creation Error");
+        }
+    }
+
+    semId = semget(ftok("./TriServer.c", 's'), semNum, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (semId < 0)
+    {
+        if (errno == EEXIST)
+        {
+            perror("Semaphore Already Existing");
+            semId = semget(ftok("./TriServer.c", 's'), semNum, S_IRUSR | S_IWUSR);
+            quit++;
+        }
+        else
+        {
+            perror("semaphore's ID creation Error");
+        }
+    }
+    struct semid_ds dataStruct;
+    mySU semArgs;
+    semArgs.dataStruct = &dataStruct;
+    unsigned short values[] = {1, 1, 0, 0};
+    semArgs.array = values;
+
+    for (int i = 0; i < semNum; i++)
+    {
+        p_ops[i].sem_num = i;
+        p_ops[i].sem_op = -1;
+        p_ops[i].sem_flg = 0;
+
+        v_ops[i].sem_num = i;
+        v_ops[i].sem_op = 1;
+        v_ops[i].sem_flg = 0;
+    }
+
+    if (semctl(semId, 0, SETALL, semArgs) < 0)
+    {
+        perror("Server Semaphore value association Error");
+    }
+
+    if (quit > 1)
+    {
+        closure();
+        return 0;
+    }
+
+    sigfillset(&disabledSigSet);
+    sigdelset(&disabledSigSet, SIGINT);
+    enableSigSet();
+    signal(SIGINT, sigHandler);
+    signal(SIGUSR1, sigHandler);
+    signal(SIGUSR2, sigHandler);
+    signal(SIGALRM, sigHandler);
+    signal(SIGTERM, sigHandler);
     //----------------------------------------------------------------------------------------------//
 
     // corpo del codice ------------------------------------------------------------------//
     printf("Process Pid: %d\n", getpid());
     fflush(stdout);
 
-    sigfillset(&disabledSigSet);
-    sigdelset(&disabledSigSet, SIGINT);
-    sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
+    disableSigSet();
     if (semop(semId, &p_ops[0], 1) == -1)
     {
         perror("Error in Semaphore Operation (S, p, 1)");
-        closure();
+        return 0;
     }
 
     if (memPointer->onGame > 0) // una partita è già in corso
@@ -335,7 +397,7 @@ int main(int argc, char *argv[])
         if (semop(semId, &v_ops[0], 1) < 0)
         {
             perror("Error in Semaphore Operation (S, v, 1)");
-            closure();
+            return 0;
         }
         enableSigSet();
         closure();
@@ -346,7 +408,6 @@ int main(int argc, char *argv[])
     memPointer->Client2 = -12;
     memPointer->onGame = 3; // il valore è a 3 per consentire di diminuire 2 volte causa ctrl c
     memPointer->current = -1;
-
     for (int i = 0; i < 3; i++)
     {
         for (int j = 0; j < 3; j++)
@@ -363,45 +424,48 @@ int main(int argc, char *argv[])
 
     do
     {
-        if (semop(semId, &v_ops[0], 1) == -1)
+
+        if (semop(semId, &v_ops[0], 1) < 0)
         {
             perror("Error in Semaphore Operation (S, v, 2)");
-            closure();
+            return 0;
         }
         enableSigSet();
-
         pause();
-
-        sigfillset(&disabledSigSet);
-        sigdelset(&disabledSigSet, SIGINT);
-        sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
-        if (semop(semId, &p_ops[0], 1) == -1)
+        disableSigSet();
+        if (semop(semId, &p_ops[0], 1) < 0)
         {
             perror("Error in Semaphore Operation (S, v, 2)");
-            closure();
+            return 0;
         }
+    } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11) && memPointer->onGame > 1);
 
-    } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11) && memPointer->onGame > 0);
-
+    if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
+    {
+        sendMessage("Entrambi i giocatori individuati. Partita avviata.\n", 1, 1);
+    }
     while (memPointer->onGame > 1)
     {
         if (semop(semId, &v_ops[0], 1) == -1)
         {
             perror("Error in Semaphore Operation (S, v, 3)");
-            closure();
+            return 0;
         }
         enableSigSet();
 
         // partita
 
-        sigfillset(&disabledSigSet);
-        sigdelset(&disabledSigSet, SIGINT);
-        sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
+        disableSigSet();
         if (semop(semId, &p_ops[0], 1) == -1)
         {
             perror("Error in Semaphore Operation (S, p, 3)");
-            closure();
+            return 0;
         }
+    }
+    if (semop(semId, &v_ops[0], 1) == -1)
+    {
+        perror("Error in Semaphore Operation (S, v, 49)");
+        return 0;
     }
 
     closure();
