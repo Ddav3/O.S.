@@ -91,7 +91,6 @@ void closure()
         perror("Error in Semaphore Operation (S, p, 50)");
         return;
     }
-
     memPointer->current = -1;
     memPointer->onGame = 1;
 
@@ -107,6 +106,9 @@ void closure()
             kill(memPointer->Client2, SIGINT);
         }
 
+        // #TODO idea alternativa: kill al primo processo per evitare che si mischino i segnali
+        //  prima kill a 1 aspetto risponda, poi kill a 2
+
         while ((memPointer->Client1 != -11 || memPointer->Client2 != -12))
         {
             if (semop(semId, &v_ops[0], 1) == -1)
@@ -116,7 +118,7 @@ void closure()
             }
             enableSigSet();
 
-            pause();
+            sleep(1);
 
             disableSigSet();
             if (semop(semId, &p_ops[0], 1) == -1)
@@ -135,11 +137,11 @@ void closure()
 
     if (shmId != -2)
     {
-
         if (shmctl(shmId, IPC_RMID, NULL) < 0)
         {
             perror("Shared Memory Cancellation Error");
         }
+        shmId = -2;
     }
     if (&memPointer != NULL)
     {
@@ -161,6 +163,7 @@ void closure()
         {
             perror("Semaphores Elimination Error");
         }
+        semId = -2;
     }
 
     print("Deleting...\n");
@@ -227,6 +230,20 @@ void sigHandler(int signal)
     if (signal == SIGINT)
     {
         memPointer->onGame--;
+
+        if (memPointer->onGame == 1)
+        {
+            memPointer->current = -1;
+            if (semop(semId, &v_ops[0], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, v, 51)");
+                return;
+            }
+            enableSigSet();
+
+            closure();
+            return;
+        }
     }
     else
     {
@@ -245,6 +262,9 @@ void sigHandler(int signal)
                 }
             }
         }
+        else if (signal == SIGUSR2)
+        {
+        }
     }
 
     if (semop(semId, &v_ops[0], 1) == -1)
@@ -252,6 +272,7 @@ void sigHandler(int signal)
         perror("Error in Semaphore Operation (S, v, 0)");
         closure();
     }
+    return;
 }
 
 int main(int argc, char *argv[])
@@ -453,22 +474,30 @@ int main(int argc, char *argv[])
         }
         enableSigSet();
 
-        // partita
+        pause();
+        if (shmId == -2 || semId == -2) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
+        {
+            break;
+        }
 
         disableSigSet();
-        if (semop(semId, &p_ops[0], 1) == -1)
+        if (semop(semId, &p_ops[0], 1) < 0)
         {
             perror("Error in Semaphore Operation (S, p, 3)");
             return 0;
         }
     }
-    if (semop(semId, &v_ops[0], 1) == -1)
-    {
-        perror("Error in Semaphore Operation (S, v, 49)");
-        return 0;
-    }
 
-    closure();
+    if (!(semId == -2 || shmId == -2)) // se almeno uno dei due è stato rimosso, vuol dire che sono passato dalla closure, quindi non la rifaccio. Altrimenti, sono uscito per partita conclusa
+    {
+        if (semop(semId, &v_ops[0], 1) < 0)
+        {
+            perror("Error in Semaphore Operation (S, v, 49)");
+            return 0;
+        }
+        enableSigSet();
+        closure();
+    }
 
     return 0;
 }

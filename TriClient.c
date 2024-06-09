@@ -90,7 +90,7 @@ void closure()
     disableSigSet();
     if (semop(semId, &p_ops[0], 1) == -1)
     {
-        perror("Error in Semaphore Operation (S, p, 50)");
+        perror("Error in Semaphore Operation (C, p, 50)");
         return;
     }
     s = memPointer->Server;
@@ -155,11 +155,25 @@ void sigHandlerC(int signal)
     {
         if (memPointer->current == -1)
         {
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C, v, 51)");
+                return;
+            }
+            enableSigSet();
             print("Partita conclusa\n");
+
             closure();
+            return;
         }
         else if (memPointer->current == getpid())
         {
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C, v, 52)");
+                return;
+            }
+            enableSigSet();
             print("Ti sei arreso.\n");
             closure();
         }
@@ -297,30 +311,42 @@ int main(int argc, char *argv[])
             return 0;
         }
 
-        // while (memPointer->onGame > 1)
-        // {
-        //     if (semop(semId, &v_ops[0], 1) == -1)
-        //     {
-        //         perror("Error in Semaphore Operation (C1, v, 2)");
-        //         return 0;
-        //     }
-        //     enableSigSet();
-
-        //     pause();
-        //     disableSigSet();
-        //     if (semop(semId, &p_ops[0], 1) == -1)
-        //     {
-        //         perror("Error in Semaphore Operation (C1, p, 1)");
-        //         return 0;
-        //     }
-        // }
-        if (semop(semId, &v_ops[0], 1) == -1)
+        while (memPointer->onGame > 1)
         {
-            perror("Error in Semaphore Operation (C1, v, 3)");
-            return 0;
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C1, v, 2)");
+                return 0;
+            }
+            enableSigSet();
+
+            pause();
+            print("Entro\n");
+
+            if (semId != -2)
+            {
+                disableSigSet();
+                if (semop(semId, &p_ops[0], 1) == -1)
+                {
+                    perror("Error in Semaphore Operation (C1, p, 1)");
+                    return 0;
+                }
+            }
+            else
+            {
+                break;
+            }
         }
-        enableSigSet();
-        closure();
+        if (semId != -2)
+        {
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C1, v, 3)");
+                return 0;
+            }
+            enableSigSet();
+            closure();
+        }
         return 0;
     }
     else if (memPointer->Client2 == -12)
@@ -343,26 +369,39 @@ int main(int argc, char *argv[])
             perror("Error in Semaphore Operation (C2, p, 1)");
         }
 
-        // while (memPointer->onGame > 1)
-        // {
-        //     if (semop(semId, &v_ops[0], 1) == -1)
-        //     {
-        //         perror("Error in Semaphore Operation (C2, v, 2)");
-        //     }
-        //     enableSigSet();
-
-        //     disableSigSet();
-        //     if (semop(semId, &p_ops[0], 1) == -1)
-        //     {
-        //         perror("Error in Semaphore Operation (C2, p, 1)");
-        //     }
-        // }
-        if (semop(semId, &v_ops[0], 1) == -1)
+        while (memPointer->onGame > 1)
         {
-            perror("Error in Semaphore Operation (C2, v, 3)");
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C2, v, 2)");
+            }
+            enableSigSet();
+
+            pause();
+            print("Entro\n");
+
+            if (semId != -2)
+            {
+                disableSigSet();
+                if (semop(semId, &p_ops[0], 1) == -1)
+                {
+                    perror("Error in Semaphore Operation (C2, p, 1)");
+                }
+            }
+            else
+            {
+                break;
+            }
         }
-        enableSigSet();
-        closure();
+        if (semId != -2)
+        {
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C2, v, 3)");
+            }
+            enableSigSet();
+            closure();
+        }
         return 0;
     }
     else
