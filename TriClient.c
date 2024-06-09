@@ -407,7 +407,17 @@ int main(int argc, char *argv[])
     else
     {
         print("Partita occupata.\n");
-        closure();
+        if (&memPointer != 0)
+        {
+            if (shmdt(memPointer) < 0)
+            {
+                perror("Shared Memory Detaching Error");
+                return;
+            }
+            semId = -2;
+        }
+
+        free(name);
     }
 
     return 0;
