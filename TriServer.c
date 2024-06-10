@@ -224,7 +224,7 @@ void sigHandler(int signal)
     if (semop(semId, &p_ops[0], 1) == -1)
     {
         perror("Error in Semaphore Operation (S, p, 0)");
-        closure();
+        return;
     }
 
     if (signal == SIGINT)
@@ -519,7 +519,6 @@ int main(int argc, char *argv[])
                 perror("Error in Semaphore Operation (S, v1, 51)");
                 return 0;
             }
-            // kill(memPointer->Client1, SIGUSR2);
         }
         else
         {
@@ -528,7 +527,6 @@ int main(int argc, char *argv[])
                 perror("Error in Semaphore Operation (S, v2, 51)");
                 return 0;
             }
-            // kill(memPointer->Client2, SIGUSR2);
         }
 
         enableSigSet();

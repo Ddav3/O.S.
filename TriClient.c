@@ -164,7 +164,7 @@ void sigHandlerC(int signal)
             print("Partita conclusa\n");
 
             closure();
-            return;
+            exit(0);
         }
         else
         {
@@ -335,7 +335,6 @@ int main(int argc, char *argv[])
                 perror("Error in Semaphore Operation (C1, v3, 1)");
                 return 0;
             }
-            // pause();
         }
 
         return 0;
@@ -374,7 +373,6 @@ int main(int argc, char *argv[])
                 perror("Error in Semaphore Operation (C2, v3, 1)");
                 return 0;
             }
-            // pause();
         }
 
         return 0;
