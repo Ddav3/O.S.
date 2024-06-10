@@ -229,7 +229,6 @@ void sigHandler(int signal)
 
     if (signal == SIGINT)
     {
-
         if (memPointer->current == -10)
         {
             sendMessage("Il giocatore 1 si è arreso. Hai vinto tu, giocatore 2!", 0, 1);
@@ -296,6 +295,7 @@ void sigHandler(int signal)
         perror("Error in Semaphore Operation (S, v, 0)");
         closure();
     }
+    enableSigSet();
     return;
 }
 
@@ -470,18 +470,26 @@ int main(int argc, char *argv[])
         }
         enableSigSet();
         pause();
+        if (semId == -2)
+        {
+            break;
+        }
         disableSigSet();
         if (semop(semId, &p_ops[0], 1) < 0)
         {
-            perror("Error in Semaphore Operation (S, v, 2)");
+            perror("Error in Semaphore Operation (S, p, 2)");
             return 0;
         }
-    } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11) && memPointer->onGame > 1);
+    } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11) && semId != -2);
+    if (semId == -2)
+    {
+        return 0;
+    }
 
     if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
     {
-        sendMessage("Entrambi i giocatori individuati. Partita avviata.\n", 1, 1);
-        sendMessage("Cominci tu, giocatore 1.\nScegli la tua mossa:\n", 1, 0);
+        sendMessage("Entrambi i giocatori individuati. Partita avviata.\n", 0, 1);
+        sendMessage("Entrambi i giocatori individuati. Partita avviata.\nCominci tu, giocatore 1. Scegli la tua mossa:\n", 1, 0);
         memPointer->current = memPointer->Client1;
     }
 
@@ -492,11 +500,51 @@ int main(int argc, char *argv[])
     }
     enableSigSet();
 
-    while (semId != -2 || shmId != -2) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
+    timeOut = 0;
+    while ((semId != -2 && shmId != -2) && timeOut < 4) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
     {
+        disableSigSet();
+        if (semop(semId, &p_ops[3], 1) == -1)
+        {
+            perror("Error in Semaphore Operation (S, p3, 1)");
+            return 0;
+        }
+        timeOut++;
+        print("faccio\n");
 
-        pause();
+        if (timeOut % 2 == 0)
+        {
+            if (semop(semId, &v_ops[1], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, v1, 51)");
+                return 0;
+            }
+            // kill(memPointer->Client1, SIGUSR2);
+        }
+        else
+        {
+            if (semop(semId, &v_ops[2], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, v2, 51)");
+                return 0;
+            }
+            // kill(memPointer->Client2, SIGUSR2);
+        }
+
+        enableSigSet();
     }
+    print("fine\n");
+    if (semop(semId, &v_ops[1], 1) < 0)
+    {
+        perror("Error in Semaphore Operation (S, v1, 30)");
+        return 0;
+    }
+    if (semop(semId, &v_ops[2], 1) < 0)
+    {
+        perror("Error in Semaphore Operation (S, v2, 30)");
+        return 0;
+    }
+    closure(); // da togliere
 
     return 0;
 }

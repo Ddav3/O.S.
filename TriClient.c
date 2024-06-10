@@ -147,7 +147,7 @@ void sigHandlerC(int signal)
     disableSigSet();
     if (semop(semId, &p_ops[0], 1) == -1)
     {
-        perror("Error in Semaphore Operation (C, p, 50)");
+        perror("Error in Semaphore Operation (C, p, 60)");
         return;
     }
 
@@ -166,7 +166,7 @@ void sigHandlerC(int signal)
             closure();
             return;
         }
-        else if (memPointer->current == getpid())
+        else
         {
             print("Ti sei arreso.\n");
             if (memPointer->Client1 == getpid())
@@ -177,7 +177,7 @@ void sigHandlerC(int signal)
             {
                 memPointer->current = -20;
             }
-            kill(memPointer->Server, SIGUSR2);
+            kill(memPointer->Server, SIGINT);
             memPointer->onGame = 1;
 
             if (semop(semId, &v_ops[0], 1) == -1)
@@ -192,7 +192,7 @@ void sigHandlerC(int signal)
     }
     else if (signal == SIGUSR2)
     {
-        receiveMessage();
+        // receiveMessage();
     }
 
     if (semop(semId, &v_ops[0], 1) == -1)
@@ -321,24 +321,20 @@ int main(int argc, char *argv[])
         while (semId != -2)
         {
             disableSigSet();
-            if (semop(semId, &p_ops[0], 1) == -1)
+            if (semop(semId, &p_ops[1], 1) < 0)
             {
-                perror("Error in Semaphore Operation (C1, p, 1)");
-                return 0;
-            }
-            if (memPointer->onGame == 1)
-            {
-                closure();
-            }
-            if (semop(semId, &v_ops[0], 1) == -1)
-            {
-                perror("Error in Semaphore Operation (C1, v, 5)");
+                perror("Error in Semaphore Operation (C1, p1, 1)");
                 return 0;
             }
             enableSigSet();
+            memPointer->current = getpid();
+            print("faccio\n");
 
-            pause();
-
+            if (semop(semId, &v_ops[3], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (C1, v3, 1)");
+                return 0;
+            }
             // pause();
         }
 
@@ -361,21 +357,24 @@ int main(int argc, char *argv[])
         while (semId != -2)
         {
             disableSigSet();
-            if (semop(semId, &p_ops[0], 1) == -1)
+            if (semop(semId, &p_ops[2], 1) < 0)
             {
-                perror("Error in Semaphore Operation (C2, p, 1)");
-            }
-            if (memPointer->onGame == -1)
-            {
-                closure();
-            }
-            if (semop(semId, &v_ops[0], 1) == -1)
-            {
-                perror("Error in Semaphore Operation (C2, v, 2)");
+                perror("Error in Semaphore Operation (C2, p2, 1)");
+                return 0;
             }
             enableSigSet();
 
-            pause();
+            // mossa
+            memPointer->current = getpid();
+
+            printf("%d\n", memPointer->current);
+            fflush(stdout);
+            if (semop(semId, &v_ops[3], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (C2, v3, 1)");
+                return 0;
+            }
+            // pause();
         }
 
         return 0;
