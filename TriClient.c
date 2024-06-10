@@ -294,59 +294,42 @@ int main(int argc, char *argv[])
         memPointer->Client1 = getpid();
         receiver.Type = 1;
         // caso del bot #TODO: execl del bot, e termini il client
-
-        kill(memPointer->Server, SIGUSR1);
-        if (semop(semId, &v_ops[0], 1) == -1)
         {
-            perror("Error in Semaphore Operation (C1, v, 1)");
-            return 0;
-        }
-        enableSigSet();
-        print("In attesa di un altro giocatore...\n");
-        pause();
-        disableSigSet();
-        if (semop(semId, &p_ops[0], 1) == -1)
-        {
-            perror("Error in Semaphore Operation (C1, p, 1)");
-            return 0;
-        }
-
-        while (memPointer->onGame > 1)
-        {
+            kill(memPointer->Server, SIGUSR1);
             if (semop(semId, &v_ops[0], 1) == -1)
             {
-                perror("Error in Semaphore Operation (C1, v, 2)");
+                perror("Error in Semaphore Operation (C1, v, 1)");
+                return 0;
+            }
+            enableSigSet();
+            print("In attesa di un altro giocatore...\n");
+            pause();
+        }
+
+        while (semId != -2)
+        {
+            disableSigSet();
+            if (semop(semId, &p_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C1, p, 1)");
+                return 0;
+            }
+            if (memPointer->onGame == 1)
+            {
+                closure();
+            }
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C1, v, 5)");
                 return 0;
             }
             enableSigSet();
 
             pause();
-            print("Entro\n");
 
-            if (semId != -2)
-            {
-                disableSigSet();
-                if (semop(semId, &p_ops[0], 1) == -1)
-                {
-                    perror("Error in Semaphore Operation (C1, p, 1)");
-                    return 0;
-                }
-            }
-            else
-            {
-                break;
-            }
+            // pause();
         }
-        if (semId != -2)
-        {
-            if (semop(semId, &v_ops[0], 1) == -1)
-            {
-                perror("Error in Semaphore Operation (C1, v, 3)");
-                return 0;
-            }
-            enableSigSet();
-            closure();
-        }
+
         return 0;
     }
     else if (memPointer->Client2 == -12)
@@ -354,23 +337,26 @@ int main(int argc, char *argv[])
         memPointer->Client2 = getpid();
         receiver.Type = 2;
 
-        kill(memPointer->Server, SIGUSR1);
-        if (semop(semId, &v_ops[0], 1) == -1)
         {
-            perror("Error in Semaphore Operation (C2, v, 1)");
+            kill(memPointer->Server, SIGUSR1);
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C2, v, 1)");
+            }
+            enableSigSet();
+            pause();
         }
-        enableSigSet();
-
-        pause();
-
-        disableSigSet();
-        if (semop(semId, &p_ops[0], 1) == -1)
+        while (semId != -2)
         {
-            perror("Error in Semaphore Operation (C2, p, 1)");
-        }
-
-        while (memPointer->onGame > 1)
-        {
+            disableSigSet();
+            if (semop(semId, &p_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (C2, p, 1)");
+            }
+            if (memPointer->onGame == -1)
+            {
+                closure();
+            }
             if (semop(semId, &v_ops[0], 1) == -1)
             {
                 perror("Error in Semaphore Operation (C2, v, 2)");
@@ -378,30 +364,8 @@ int main(int argc, char *argv[])
             enableSigSet();
 
             pause();
-            print("Entro\n");
+        }
 
-            if (semId != -2)
-            {
-                disableSigSet();
-                if (semop(semId, &p_ops[0], 1) == -1)
-                {
-                    perror("Error in Semaphore Operation (C2, p, 1)");
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
-        if (semId != -2)
-        {
-            if (semop(semId, &v_ops[0], 1) == -1)
-            {
-                perror("Error in Semaphore Operation (C2, v, 3)");
-            }
-            enableSigSet();
-            closure();
-        }
         return 0;
     }
     else
@@ -412,7 +376,7 @@ int main(int argc, char *argv[])
             if (shmdt(memPointer) < 0)
             {
                 perror("Shared Memory Detaching Error");
-                return;
+                return 0;
             }
             semId = -2;
         }

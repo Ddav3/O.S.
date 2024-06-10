@@ -445,7 +445,6 @@ int main(int argc, char *argv[])
 
     do
     {
-
         if (semop(semId, &v_ops[0], 1) < 0)
         {
             perror("Error in Semaphore Operation (S, v, 2)");
@@ -464,7 +463,9 @@ int main(int argc, char *argv[])
     if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
     {
         sendMessage("Entrambi i giocatori individuati. Partita avviata.\n", 1, 1);
+        sendMessage("Cominci tu, giocatore 1.\nScegli la tua mossa:\n", 1, 0);
     }
+
     while (memPointer->onGame > 1)
     {
         if (semop(semId, &v_ops[0], 1) == -1)
