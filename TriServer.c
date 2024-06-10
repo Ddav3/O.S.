@@ -229,6 +229,20 @@ void sigHandler(int signal)
 
     if (signal == SIGINT)
     {
+
+        if (memPointer->current == -10)
+        {
+            sendMessage("Il giocatore 1 si è arreso. Hai vinto tu, giocatore 2!", 0, 1);
+            closure();
+            return;
+        }
+        else if (memPointer->current == -20)
+        {
+            sendMessage("Il giocatore 2 si è arreso. Hai vinto tu, giocatore 1!", 1, 0);
+            closure();
+            return;
+        }
+
         memPointer->onGame--;
 
         if (memPointer->onGame == 1)
@@ -437,12 +451,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    /*
-        l'idea è che adesso sia i server che i client hanno come punto di riferimento la variabile ongame: così da evitare
-        segmentation fault (forse) la funzione closure utilizza questa variabile per accertarsi che prima si stacchi il client
-        1, poi che si stacchi il client 2, infine esce da solo
-    */
-
     do
     {
         if (semop(semId, &v_ops[0], 1) < 0)
@@ -464,40 +472,20 @@ int main(int argc, char *argv[])
     {
         sendMessage("Entrambi i giocatori individuati. Partita avviata.\n", 1, 1);
         sendMessage("Cominci tu, giocatore 1.\nScegli la tua mossa:\n", 1, 0);
+        memPointer->current = memPointer->Client1;
     }
 
-    while (memPointer->onGame > 1)
+    if (semop(semId, &v_ops[0], 1) == -1)
     {
-        if (semop(semId, &v_ops[0], 1) == -1)
-        {
-            perror("Error in Semaphore Operation (S, v, 3)");
-            return 0;
-        }
-        enableSigSet();
+        perror("Error in Semaphore Operation (S, v, 3)");
+        return 0;
+    }
+    enableSigSet();
+
+    while (semId != -2 || shmId != -2) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
+    {
 
         pause();
-        if (shmId == -2 || semId == -2) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
-        {
-            break;
-        }
-
-        disableSigSet();
-        if (semop(semId, &p_ops[0], 1) < 0)
-        {
-            perror("Error in Semaphore Operation (S, p, 3)");
-            return 0;
-        }
-    }
-
-    if (!(semId == -2 || shmId == -2)) // se almeno uno dei due è stato rimosso, vuol dire che sono passato dalla closure, quindi non la rifaccio. Altrimenti, sono uscito per partita conclusa
-    {
-        if (semop(semId, &v_ops[0], 1) < 0)
-        {
-            perror("Error in Semaphore Operation (S, v, 49)");
-            return 0;
-        }
-        enableSigSet();
-        closure();
     }
 
     return 0;

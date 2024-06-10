@@ -168,14 +168,26 @@ void sigHandlerC(int signal)
         }
         else if (memPointer->current == getpid())
         {
+            print("Ti sei arreso.\n");
+            if (memPointer->Client1 == getpid())
+            {
+                memPointer->current = -10;
+            }
+            else if (memPointer->Client2 == getpid())
+            {
+                memPointer->current = -20;
+            }
+            kill(memPointer->Server, SIGUSR2);
+            memPointer->onGame = 1;
+
             if (semop(semId, &v_ops[0], 1) == -1)
             {
-                perror("Error in Semaphore Operation (C, v, 52)");
+                perror("Error in Semaphore Operation (C, v, 54)");
                 return;
             }
             enableSigSet();
-            print("Ti sei arreso.\n");
             closure();
+            return;
         }
     }
     else if (signal == SIGUSR2)
