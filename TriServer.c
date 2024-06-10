@@ -233,12 +233,22 @@ void sigHandler(int signal)
         if (memPointer->current == -10)
         {
             sendMessage("Il giocatore 1 si è arreso. Hai vinto tu, giocatore 2!", 0, 1);
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (Sc, v, 1)");
+                return;
+            }
             closure();
             return;
         }
         else if (memPointer->current == -20)
         {
             sendMessage("Il giocatore 2 si è arreso. Hai vinto tu, giocatore 1!", 1, 0);
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (Sc, v, 2)");
+                return;
+            }
             closure();
             return;
         }
