@@ -542,6 +542,7 @@ int main(int argc, char *argv[])
         perror("Error in Semaphore Operation (S, v2, 30)");
         return 0;
     }
+
     closure(); // da togliere
 
     return 0;
