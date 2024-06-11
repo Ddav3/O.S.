@@ -78,7 +78,6 @@ void enableSigSet()
     sigdelset(&disabledSigSet, SIGUSR1);
     sigdelset(&disabledSigSet, SIGUSR2);
     sigdelset(&disabledSigSet, SIGALRM);
-    sigdelset(&disabledSigSet, SIGTERM);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
@@ -167,6 +166,7 @@ void closure()
     }
 
     print("Deleting...\n");
+    exit(0);
 }
 
 void sendMessage(char *msg, int who1, int who2)
@@ -231,7 +231,7 @@ void sigHandler(int signal)
     {
         if (memPointer->current == -10)
         {
-            sendMessage("Il giocatore 1 si è arreso. Hai vinto tu, giocatore 2!", 0, 1);
+            sendMessage("Il giocatore 1 si è arreso. Hai vinto tu, giocatore 2!\n", 0, 1);
             if (semop(semId, &v_ops[0], 1) == -1)
             {
                 perror("Error in Semaphore Operation (Sc, v, 1)");
@@ -242,7 +242,7 @@ void sigHandler(int signal)
         }
         else if (memPointer->current == -20)
         {
-            sendMessage("Il giocatore 2 si è arreso. Hai vinto tu, giocatore 1!", 1, 0);
+            sendMessage("Il giocatore 2 si è arreso. Hai vinto tu, giocatore 1!\n", 1, 0);
             if (semop(semId, &v_ops[0], 1) == -1)
             {
                 perror("Error in Semaphore Operation (Sc, v, 2)");
@@ -422,7 +422,6 @@ int main(int argc, char *argv[])
     signal(SIGUSR1, sigHandler);
     signal(SIGUSR2, sigHandler);
     signal(SIGALRM, sigHandler);
-    signal(SIGTERM, sigHandler);
     //----------------------------------------------------------------------------------------------//
 
     // corpo del codice ------------------------------------------------------------------//
@@ -500,38 +499,49 @@ int main(int argc, char *argv[])
     }
     enableSigSet();
 
-    timeOut = 0;
-    while ((semId != -2 && shmId != -2) && timeOut < 4) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
+    while ((semId != -2 && shmId != -2)) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
     {
         disableSigSet();
-        if (semop(semId, &p_ops[3], 1) == -1)
+        if (semop(semId, &p_ops[3], 1) == -1) // qui errore #TODO
         {
             perror("Error in Semaphore Operation (S, p3, 1)");
             return 0;
         }
-        timeOut++;
-        print("faccio\n");
 
-        if (timeOut % 2 == 0)
+        if (!(memPointer->Client1 == -11 || memPointer->Client2 == -12))
         {
-            if (semop(semId, &v_ops[1], 1) < 0)
+            if (memPointer->move == -1)
             {
-                perror("Error in Semaphore Operation (S, v1, 51)");
-                return 0;
+                enableSigSet();
+                break;
             }
-        }
-        else
-        {
-            if (semop(semId, &v_ops[2], 1) < 0)
+
+            if (memPointer->move % 2 == 0)
             {
-                perror("Error in Semaphore Operation (S, v2, 51)");
-                return 0;
+                if (semop(semId, &v_ops[1], 1) < 0)
+                {
+                    perror("Error in Semaphore Operation (S, v1, 51)");
+                    return 0;
+                }
+            }
+            else
+            {
+                if (semop(semId, &v_ops[2], 1) < 0)
+                {
+                    perror("Error in Semaphore Operation (S, v2, 51)");
+                    return 0;
+                }
             }
         }
 
         enableSigSet();
     }
-    print("fine\n");
+
+    if (semop(semId, &v_ops[0], 1) < 0)
+    {
+        perror("Error in Semaphore Operation (S, v, 30)");
+        return 0;
+    }
     if (semop(semId, &v_ops[1], 1) < 0)
     {
         perror("Error in Semaphore Operation (S, v1, 30)");
@@ -542,7 +552,6 @@ int main(int argc, char *argv[])
         perror("Error in Semaphore Operation (S, v2, 30)");
         return 0;
     }
-
     closure(); // da togliere
 
     return 0;

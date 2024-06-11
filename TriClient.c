@@ -27,6 +27,7 @@ int s; // variabile provvisoria per informare il server
 sigset_t disabledSigSet;
 struct sembuf p_ops[semNum];
 struct sembuf v_ops[semNum];
+char choice[50];
 
 typedef union semUnion
 {
@@ -72,7 +73,6 @@ void enableSigSet()
     sigdelset(&disabledSigSet, SIGUSR1);
     sigdelset(&disabledSigSet, SIGUSR2);
     sigdelset(&disabledSigSet, SIGALRM);
-    sigdelset(&disabledSigSet, SIGTERM);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
@@ -132,6 +132,35 @@ void closure()
     return;
 }
 
+void showMatrix() // senza semafori
+{
+    printf("\n");
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            printf(" %c ", memPointer->table[i][j]);
+            fflush(stdout);
+            if (j != 2)
+            {
+                printf("|");
+                fflush(stdout);
+            }
+        }
+        if (i != 2)
+        {
+
+            printf("\n___|___|___\n");
+            fflush(stdout);
+        }
+        else
+        {
+            printf("\n   |   |   \n");
+            fflush(stdout);
+        }
+    }
+}
+
 void receiveMessage()
 {
     if (msgrcv(msgId, &receiver, msgSize, receiver.Type, 0) < 0)
@@ -161,6 +190,7 @@ void sigHandlerC(int signal)
                 return;
             }
             enableSigSet();
+
             print("Partita conclusa\n");
 
             closure();
@@ -177,22 +207,22 @@ void sigHandlerC(int signal)
             {
                 memPointer->current = -20;
             }
-            kill(memPointer->Server, SIGINT);
             memPointer->onGame = 1;
+            kill(memPointer->Server, SIGINT);
 
             if (semop(semId, &v_ops[0], 1) == -1)
             {
                 perror("Error in Semaphore Operation (C, v, 54)");
                 return;
             }
-            enableSigSet();
+
             closure();
-            return;
+            exit(0);
         }
     }
     else if (signal == SIGUSR2)
     {
-        // receiveMessage();
+        receiveMessage();
     }
 
     if (semop(semId, &v_ops[0], 1) == -1)
@@ -201,6 +231,23 @@ void sigHandlerC(int signal)
         return;
     }
     enableSigSet();
+}
+
+void makeMove() // senza semafori
+{
+    do
+    {
+        scanf("%s", choice);
+    } while (choice[0] == '\n');
+
+    if (choice[0] < '1' || choice[0] > '9')
+    {
+        memPointer->move = -1;
+    }
+    else
+    {
+        memPointer->move = (choice[0] - '0') - 1;
+    }
 }
 
 int main(int argc, char *argv[])
@@ -287,7 +334,6 @@ int main(int argc, char *argv[])
     signal(SIGUSR1, sigHandlerC);
     signal(SIGUSR2, sigHandlerC);
     signal(SIGALRM, sigHandlerC);
-    signal(SIGTERM, sigHandlerC); // userò questo segnale per informare della fine della partita
     //----------------------------------------------------------------------------------//
 
     // blocco di codice #TODO ----------------------------------------------------------//
@@ -326,15 +372,31 @@ int main(int argc, char *argv[])
                 perror("Error in Semaphore Operation (C1, p1, 1)");
                 return 0;
             }
-            enableSigSet();
             memPointer->current = getpid();
-            print("faccio\n");
+
+            if (semop(semId, &p_ops[0], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (C1, p, 2)");
+                return 0;
+            }
+
+            showMatrix();
+
+            if (semop(semId, &v_ops[0], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (C1, v, 2)");
+                return 0;
+            }
+            enableSigSet();
+
+            makeMove();
 
             if (semop(semId, &v_ops[3], 1) < 0)
             {
                 perror("Error in Semaphore Operation (C1, v3, 1)");
                 return 0;
             }
+            enableSigSet();
         }
 
         return 0;
@@ -361,13 +423,27 @@ int main(int argc, char *argv[])
                 perror("Error in Semaphore Operation (C2, p2, 1)");
                 return 0;
             }
-            enableSigSet();
 
             // mossa
             memPointer->current = getpid();
 
-            printf("%d\n", memPointer->current);
-            fflush(stdout);
+            if (semop(semId, &p_ops[0], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (C2, p, 2)");
+                return 0;
+            }
+
+            showMatrix();
+
+            if (semop(semId, &v_ops[0], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (C2, v, 2)");
+                return 0;
+            }
+            enableSigSet();
+
+            makeMove();
+
             if (semop(semId, &v_ops[3], 1) < 0)
             {
                 perror("Error in Semaphore Operation (C2, v3, 1)");
