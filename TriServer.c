@@ -218,6 +218,11 @@ void sendMessage(char *msg, int who1, int who2)
     }
 }
 
+void compileMatrix(char symbol)
+{
+    memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol;
+}
+
 void sigHandler(int signal)
 {
     disableSigSet();
@@ -499,7 +504,7 @@ int main(int argc, char *argv[])
     }
     enableSigSet();
 
-    while ((semId != -2 && shmId != -2)) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
+    while (1) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
     {
         disableSigSet();
         if (semop(semId, &p_ops[3], 1) == -1) // qui errore #TODO
@@ -508,29 +513,47 @@ int main(int argc, char *argv[])
             return 0;
         }
 
-        if (!(memPointer->Client1 == -11 || memPointer->Client2 == -12))
+        if (memPointer->move == -1)
         {
-            if (memPointer->move == -1)
-            {
-                enableSigSet();
-                break;
-            }
+            // gestisci dopo
+            enableSigSet();
 
-            if (memPointer->move % 2 == 0)
+            break;
+        }
+        else
+        {
+
+            if (memPointer->table[memPointer->move / 3][memPointer->move % 3] == ' ')
             {
-                if (semop(semId, &v_ops[1], 1) < 0)
+                if (memPointer->current == memPointer->Client1)
                 {
-                    perror("Error in Semaphore Operation (S, v1, 51)");
-                    return 0;
+                    compileMatrix(symbol1);
+                    if (semop(semId, &v_ops[2], 1) < 0)
+                    {
+                        perror("Error in Semaphore Operation (S, v2, 51)");
+                        return 0;
+                    }
+                }
+                else if (memPointer->current == memPointer->Client2)
+                {
+                    compileMatrix(symbol2);
+                    if (semop(semId, &v_ops[1], 1) < 0)
+                    {
+                        perror("Error in Semaphore Operation (S, v1, 51)");
+                        return 0;
+                    }
                 }
             }
             else
             {
-                if (semop(semId, &v_ops[2], 1) < 0)
-                {
-                    perror("Error in Semaphore Operation (S, v2, 51)");
-                    return 0;
-                }
+                enableSigSet();
+            }
+
+            if (memPointer->current == memPointer->Client2)
+            {
+            }
+            else if (memPointer->current == memPointer->Client1)
+            {
             }
         }
 
