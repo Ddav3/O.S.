@@ -218,9 +218,84 @@ void sendMessage(char *msg, int who1, int who2)
     }
 }
 
+int draw = 0;
+void winCondition()
+{
+    for (int i = 0; i < 3; i++)
+    {
+        if (((memPointer->table[i][0] == memPointer->table[i][1] && memPointer->table[i][1] == memPointer->table[i][2])) && memPointer->table[i][1] != ' ')
+        {
+            if (memPointer->table[i][1] == symbol1)
+            {
+                sendMessage("Vince il giocatore 1 per riga! Congratulazioni!\n", 1, 1);
+            }
+            else if (memPointer->table[i][1] == symbol2)
+            {
+                sendMessage("Vince il giocatore 2! Congratulazioni!\n", 1, 1);
+            }
+            if (semop(semId, &v_ops[1], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, v1, 20)");
+                return;
+            }
+            if (semop(semId, &v_ops[2], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, v2, 20)");
+                return;
+            }
+            closure();
+        }
+        else if ((memPointer->table[0][i] == memPointer->table[1][i] && memPointer->table[1][i] == memPointer->table[2][i]) && memPointer->table[1][i] != ' ')
+        {
+            if (memPointer->table[1][i] == symbol1)
+            {
+                sendMessage("Vince il giocatore 1 per colonna! Congratulazioni!\n", 1, 1);
+            }
+            else if (memPointer->table[1][i] == symbol2)
+            {
+                sendMessage("Vince il giocatore 2! Congratulazioni!\n", 1, 1);
+            }
+            if (semop(semId, &v_ops[1], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, v1, 21)");
+                return;
+            }
+            if (semop(semId, &v_ops[2], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, v2, 21)");
+                return;
+            }
+            closure();
+        }
+    }
+
+    if ((memPointer->table[1][1] != ' ') && ((memPointer->table[0][0] == memPointer->table[1][1] && memPointer->table[2][2] == memPointer->table[1][1]) || (memPointer->table[2][0] == memPointer->table[1][1] && memPointer->table[0][2] == memPointer->table[1][1])))
+    {
+        if (memPointer->table[1][1] == symbol1)
+        {
+            sendMessage("Vince il giocatore 1 per diagonale! Congratulazioni!\n", 1, 1);
+        }
+        else if (memPointer->table[1][1] == symbol2)
+        {
+            sendMessage("Vince il giocatore 2! Congratulazioni!\n", 1, 1);
+        }
+        if (semop(semId, &v_ops[1], 1) < 0)
+        {
+            perror("Error in Semaphore Operation (S, v1, 22)");
+            return;
+        }
+        if (semop(semId, &v_ops[2], 1) < 0)
+        {
+            perror("Error in Semaphore Operation (S, v2, 22)");
+            return;
+        }
+    }
+}
+
 void compileMatrix(char symbol)
 {
     memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol;
+    winCondition();
 }
 
 void sigHandler(int signal)
@@ -271,6 +346,20 @@ void sigHandler(int signal)
 
             closure();
             return;
+        }
+
+        if (semop(semId, &v_ops[0], 1) < 0)
+        {
+            perror("Error in Semaphore Operation (S, vsig)");
+            return;
+        }
+        if (semop(semId, &p_ops[3], 1) == -1) // qui errore #TODO
+        {
+            if (errno != EINTR)
+            {
+                perror("Error in Semaphore Operation (S, psig)");
+                return;
+            }
         }
     }
     else
@@ -509,8 +598,11 @@ int main(int argc, char *argv[])
         disableSigSet();
         if (semop(semId, &p_ops[3], 1) == -1) // qui errore #TODO
         {
-            perror("Error in Semaphore Operation (S, p3, 1)");
-            return 0;
+            if (errno != EINTR)
+            {
+                perror("Error in Semaphore Operation (S, p3, 1)");
+                return 0;
+            }
         }
 
         if (memPointer->move == -1)
@@ -547,6 +639,7 @@ int main(int argc, char *argv[])
             else
             {
                 enableSigSet();
+                break;
             }
 
             if (memPointer->current == memPointer->Client2)
