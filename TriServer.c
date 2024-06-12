@@ -290,6 +290,24 @@ void winCondition()
             return;
         }
     }
+
+    draw++;
+    if (draw == 9)
+    {
+        sendMessage("Pareggio!\n", 1, 1);
+
+        if (semop(semId, &v_ops[1], 1) < 0)
+        {
+            perror("Error in Semaphore Operation (S, v1, 23)");
+            return;
+        }
+        if (semop(semId, &v_ops[2], 1) < 0)
+        {
+            perror("Error in Semaphore Operation (S, v2, 23)");
+            return;
+        }
+        closure();
+    }
 }
 
 void compileMatrix(char symbol)
@@ -640,13 +658,6 @@ int main(int argc, char *argv[])
             {
                 enableSigSet();
                 break;
-            }
-
-            if (memPointer->current == memPointer->Client2)
-            {
-            }
-            else if (memPointer->current == memPointer->Client1)
-            {
             }
         }
 

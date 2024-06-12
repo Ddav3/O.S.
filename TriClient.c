@@ -191,7 +191,7 @@ void sigHandlerC(int signal)
             }
             enableSigSet();
 
-            print("Partita conclusa\n");
+            print("Partita terminata.\n");
 
             closure();
             exit(0);
@@ -223,6 +223,9 @@ void sigHandlerC(int signal)
     else if (signal == SIGUSR2)
     {
         receiveMessage();
+    }
+    else if (signal == SIGALRM)
+    {
     }
 
     if (semop(semId, &v_ops[0], 1) == -1)
