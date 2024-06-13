@@ -127,16 +127,12 @@ void closure()
         semId = -2;
     }
 
-    printf("%s %s\n", name1, name2);
-    fflush(stdout);
     if (c1 == getpid())
     {
-        print("chiudo\n");
         free(name1);
     }
     else if (c2 == getpid())
     {
-        print("chiudo\n");
         free(name2);
     }
     else
@@ -144,8 +140,7 @@ void closure()
         perror("No name was relesable");
         exit(-1);
     }
-    print("closing..\n");
-    printf("%s %s\n", name1, name2);
+    print("closing...\n");
 
     kill(s, SIGUSR2); // quando arriva di là un sigusr2, il server deve fare qualcosa per chiudere
 
@@ -252,6 +247,8 @@ void sigHandlerC(int signal)
             return;
         }
         enableSigSet();
+        receiveMessage();
+        print("ci\n");
         closure();
     }
 
@@ -377,10 +374,10 @@ int main(int argc, char *argv[])
     {
         memPointer->Client1 = getpid();
         receiver.Type = 1;
-        name1 = (char *)malloc(strlen(argv[1]) * sizeof(char));
-        // name1 = argv[2];
-        strncpy(name1, argv[1], strlen(argv[1]));
-
+        int l = strlen(argv[1]);
+        name1 = (char *)malloc((l + 1) * sizeof(char));
+        strncpy(name1, argv[1], l);
+        name1[l] = '\0';
         {
             kill(memPointer->Server, SIGUSR1);
             if (semop(semId, &v_ops[0], 1) == -1)
@@ -434,9 +431,10 @@ int main(int argc, char *argv[])
     {
         memPointer->Client2 = getpid();
         receiver.Type = 2;
-        name2 = (char *)malloc(strlen(argv[1]) * sizeof(char));
-        name2 = argv[1];
-        strcpy(name2, argv[1]);
+        int l = strlen(argv[1]);
+        name2 = (char *)malloc((l + 1) * sizeof(char));
+        strncpy(name2, argv[1], l);
+        name2[l] = '\0';
 
         {
             kill(memPointer->Server, SIGUSR1);

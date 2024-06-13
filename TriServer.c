@@ -405,19 +405,13 @@ void sigHandler(int signal)
 
             print("alarm\n");
 
-            // if (semop(semId, &v_ops[1], 1) < 0)
-            // {
-            //     perror("Error in Semaphore Operation (S, prevalrm1)");
-            //     return;
-            // }
-            // if (semop(semId, &v_ops[2], 1) < 0)
-            // {
-            //     perror("Error in Semaphore Operation (S, prevalrm2)");
-            //     return;
-            // }
-
             if (memPointer->current == memPointer->Client1)
             {
+                if (semop(semId, &v_ops[2], 1) < 0)
+                {
+                    perror("Error in Semaphore Operation (S, prevalrm2)");
+                    return;
+                }
                 sendMessage("Perdita per abbandono.\n", 1, 0);
                 sendMessage("Vittoria per abbandono.\n", 0, 1);
                 if (semop(semId, &v_ops[0], 1) < 0)
@@ -433,6 +427,11 @@ void sigHandler(int signal)
             }
             else if (memPointer->current == memPointer->Client2)
             {
+                if (semop(semId, &v_ops[1], 1) < 0)
+                {
+                    perror("Error in Semaphore Operation (S, prevalrm1)");
+                    return;
+                }
                 sendMessage("Perdita per abbandono.\n", 0, 1);
                 sendMessage("Vittoria per abbandono.\n", 1, 0);
                 if (semop(semId, &v_ops[0], 1) < 0)
