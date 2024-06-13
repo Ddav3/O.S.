@@ -70,6 +70,7 @@ void disableSigSet()
 {
     sigfillset(&disabledSigSet);
     sigdelset(&disabledSigSet, SIGINT);
+    sigdelset(&disabledSigSet, SIGALRM);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
@@ -77,7 +78,6 @@ void enableSigSet()
 {
     sigdelset(&disabledSigSet, SIGUSR1);
     sigdelset(&disabledSigSet, SIGUSR2);
-    sigdelset(&disabledSigSet, SIGALRM);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
@@ -371,7 +371,7 @@ void sigHandler(int signal)
             perror("Error in Semaphore Operation (S, vsig)");
             return;
         }
-        if (semop(semId, &p_ops[3], 1) == -1) // qui errore #TODO
+        if (semop(semId, &p_ops[3], 1) == -1)
         {
             if (errno != EINTR)
             {
@@ -399,6 +399,48 @@ void sigHandler(int signal)
         }
         else if (signal == SIGUSR2)
         {
+        }
+        else if (SIGALRM)
+        {
+
+            print("alarm\n");
+
+            if (semop(semId, &v_ops[1], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, prevalrm1)");
+                return;
+            }
+            if (semop(semId, &v_ops[2], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, prevalrm2)");
+                return;
+            }
+
+            if (memPointer->current == memPointer->Client1)
+            {
+                sendMessage("Perdita per abbandono.\n", 1, 0);
+                sendMessage("Vittoria per abbandono.\n", 0, 1);
+                if (semop(semId, &v_ops[0], 1) < 0)
+                {
+                    perror("Error in Semaphore Operation (S, prevalrm01)");
+                    return;
+                }
+                enableSigSet();
+
+                closure();
+            }
+            else if (memPointer->current == memPointer->Client2)
+            {
+                sendMessage("Perdita per abbandono.\n", 0, 1);
+                sendMessage("Vittoria per abbandono.\n", 1, 0);
+                if (semop(semId, &v_ops[0], 1) < 0)
+                {
+                    perror("Error in Semaphore Operation (S, prevalrm02)");
+                    return;
+                }
+                enableSigSet();
+                closure();
+            }
         }
     }
 
@@ -429,7 +471,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    timeOut = atoi(argv[1]); // #TODO casistica senza timeout
+    timeOut = atoi(argv[1]);
 
     if (strlen(argv[2]) != 1 || strlen(argv[3]) != 1)
     {
@@ -529,11 +571,12 @@ int main(int argc, char *argv[])
 
     sigfillset(&disabledSigSet);
     sigdelset(&disabledSigSet, SIGINT);
+    sigdelset(&disabledSigSet, SIGALRM);
     enableSigSet();
     signal(SIGINT, sigHandler);
+    signal(SIGALRM, sigHandler);
     signal(SIGUSR1, sigHandler);
     signal(SIGUSR2, sigHandler);
-    signal(SIGALRM, sigHandler);
     //----------------------------------------------------------------------------------------------//
 
     // corpo del codice ------------------------------------------------------------------//
@@ -611,10 +654,15 @@ int main(int argc, char *argv[])
     }
     enableSigSet();
 
+    if (timeOut != 0)
+    {
+        alarm(timeOut);
+    }
+
     while (1) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
     {
         disableSigSet();
-        if (semop(semId, &p_ops[3], 1) == -1) // qui errore #TODO
+        if (semop(semId, &p_ops[3], 1) == -1)
         {
             if (errno != EINTR)
             {
@@ -622,6 +670,9 @@ int main(int argc, char *argv[])
                 return 0;
             }
         }
+        enableSigSet();
+
+        alarm(0);
 
         if (memPointer->move == -1)
         {
@@ -632,7 +683,6 @@ int main(int argc, char *argv[])
         }
         else
         {
-
             if (memPointer->table[memPointer->move / 3][memPointer->move % 3] == ' ')
             {
                 if (memPointer->current == memPointer->Client1)
@@ -659,9 +709,11 @@ int main(int argc, char *argv[])
                 enableSigSet();
                 break;
             }
+            if (timeOut != 0)
+            {
+                alarm(timeOut);
+            }
         }
-
-        enableSigSet();
     }
 
     if (semop(semId, &v_ops[0], 1) < 0)

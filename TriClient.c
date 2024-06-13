@@ -367,7 +367,7 @@ int main(int argc, char *argv[])
             pause();
         }
 
-        while (semId != -2)
+        while (1)
         {
             disableSigSet();
             if (semop(semId, &p_ops[1], 1) < 0)
@@ -418,7 +418,7 @@ int main(int argc, char *argv[])
             enableSigSet();
             pause();
         }
-        while (semId != -2)
+        while (1)
         {
             disableSigSet();
             if (semop(semId, &p_ops[2], 1) < 0)
