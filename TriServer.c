@@ -336,7 +336,6 @@ void sigHandler(int signal)
                 return;
             }
             closure();
-            return;
         }
         else if (memPointer->current == -20)
         {
@@ -347,7 +346,6 @@ void sigHandler(int signal)
                 return;
             }
             closure();
-            return;
         }
 
         memPointer->onGame--;
@@ -363,20 +361,23 @@ void sigHandler(int signal)
             enableSigSet();
 
             closure();
-            return;
         }
 
-        if (semop(semId, &v_ops[0], 1) < 0)
+        if (memPointer->Client1 == memPointer->current || memPointer->current == memPointer->Client2)
         {
-            perror("Error in Semaphore Operation (S, vsig)");
-            return;
-        }
-        if (semop(semId, &p_ops[3], 1) == -1)
-        {
-            if (errno != EINTR)
+
+            if (semop(semId, &v_ops[0], 1) < 0)
             {
-                perror("Error in Semaphore Operation (S, psig)");
+                perror("Error in Semaphore Operation (S, vsig)");
                 return;
+            }
+            if (semop(semId, &p_ops[3], 1) == -1)
+            {
+                if (errno != EINTR)
+                {
+                    perror("Error in Semaphore Operation (S, psig)");
+                    return;
+                }
             }
         }
     }
@@ -394,6 +395,10 @@ void sigHandler(int signal)
                 else if (memPointer->Client1 != -11)
                 {
                     print("Giocatore 1 individuato.\n");
+                    if (memPointer->Client2 == -10)
+                    {
+                        print("Inizio partita contro il Computer.\n");
+                    }
                 }
             }
         }
@@ -627,22 +632,16 @@ int main(int argc, char *argv[])
             return 0;
         }
         enableSigSet();
+
         pause();
-        if (semId == -2)
-        {
-            break;
-        }
+
         disableSigSet();
         if (semop(semId, &p_ops[0], 1) < 0)
         {
             perror("Error in Semaphore Operation (S, p, 2)");
             return 0;
         }
-    } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11) && semId != -2);
-    if (semId == -2)
-    {
-        return 0;
-    }
+    } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11));
 
     if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
     {

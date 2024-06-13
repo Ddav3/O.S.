@@ -378,6 +378,18 @@ int main(int argc, char *argv[])
         name1 = (char *)malloc((l + 1) * sizeof(char));
         strncpy(name1, argv[1], l);
         name1[l] = '\0';
+
+        if (argc == 3)
+        {
+            kill(memPointer->Server, SIGUSR1);
+            memPointer->Client2 = -10;
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (B, v, 1)");
+            }
+            enableSigSet();
+        }
+        else
         {
             kill(memPointer->Server, SIGUSR1);
             if (semop(semId, &v_ops[0], 1) == -1)
@@ -387,8 +399,8 @@ int main(int argc, char *argv[])
             }
             enableSigSet();
             print("In attesa di un altro giocatore...\n");
-            pause();
         }
+        pause();
 
         while (1)
         {
