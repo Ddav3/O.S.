@@ -21,9 +21,9 @@
 #define semNum 4
 
 // Variabili Globali, Strutture e Funzioni -----------------------------------------------------------
-char *name;
+char *name1, *name2;
 int shmId = -2, msgId = -2, semId = -2;
-int s; // variabile provvisoria per informare il server
+int s, c1, c2; // variabili provvisorie per sostituire i pid in memoria
 sigset_t disabledSigSet;
 struct sembuf p_ops[semNum];
 struct sembuf v_ops[semNum];
@@ -65,6 +65,7 @@ void disableSigSet()
 {
     sigfillset(&disabledSigSet);
     sigdelset(&disabledSigSet, SIGINT);
+    sigdelset(&disabledSigSet, SIGALRM);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
@@ -72,7 +73,6 @@ void enableSigSet()
 {
     sigdelset(&disabledSigSet, SIGUSR1);
     sigdelset(&disabledSigSet, SIGUSR2);
-    sigdelset(&disabledSigSet, SIGALRM);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
 
@@ -94,6 +94,8 @@ void closure()
         return;
     }
     s = memPointer->Server;
+    c1 = memPointer->Client1;
+    c2 = memPointer->Client2;
 
     if (memPointer->Client1 == getpid())
     {
@@ -125,11 +127,29 @@ void closure()
         semId = -2;
     }
 
-    free(name);
+    printf("%s %s\n", name1, name2);
+    fflush(stdout);
+    if (c1 == getpid())
+    {
+        print("chiudo\n");
+        free(name1);
+    }
+    else if (c2 == getpid())
+    {
+        print("chiudo\n");
+        free(name2);
+    }
+    else
+    {
+        perror("No name was relesable");
+        exit(-1);
+    }
+    print("closing..\n");
+    printf("%s %s\n", name1, name2);
 
     kill(s, SIGUSR2); // quando arriva di là un sigusr2, il server deve fare qualcosa per chiudere
 
-    return;
+    exit(-1);
 }
 
 void showMatrix() // senza semafori
@@ -226,6 +246,13 @@ void sigHandlerC(int signal)
     }
     else if (signal == SIGALRM)
     {
+        if (semop(semId, &v_ops[0], 1) == -1)
+        {
+            perror("Error in Semaphore Operation (C, v, 500)");
+            return;
+        }
+        enableSigSet();
+        closure();
     }
 
     if (semop(semId, &v_ops[0], 1) == -1)
@@ -271,11 +298,6 @@ int main(int argc, char *argv[])
         {
             print("Inserimento scorretto dei parametri richiesti.\nIl giocatore deve indicare (spaziati): il proprio nome ed eventualmente * per giocare contro la CPU.\nRiprovare\n");
             return 0;
-        }
-        else
-        {
-            name = (char *)malloc(strlen(argv[1]) * sizeof(char));
-            name = argv[2];
         }
     }
     //----------------------------------------------------------------------------------------//
@@ -332,6 +354,7 @@ int main(int argc, char *argv[])
 
     sigfillset(&disabledSigSet);
     sigdelset(&disabledSigSet, SIGINT);
+    sigdelset(&disabledSigSet, SIGALRM);
     enableSigSet();
     signal(SIGINT, sigHandlerC);
     signal(SIGUSR1, sigHandlerC);
@@ -354,7 +377,10 @@ int main(int argc, char *argv[])
     {
         memPointer->Client1 = getpid();
         receiver.Type = 1;
-        // caso del bot #TODO: execl del bot, e termini il client
+        name1 = (char *)malloc(strlen(argv[1]) * sizeof(char));
+        // name1 = argv[2];
+        strncpy(name1, argv[1], strlen(argv[1]));
+
         {
             kill(memPointer->Server, SIGUSR1);
             if (semop(semId, &v_ops[0], 1) == -1)
@@ -408,6 +434,9 @@ int main(int argc, char *argv[])
     {
         memPointer->Client2 = getpid();
         receiver.Type = 2;
+        name2 = (char *)malloc(strlen(argv[1]) * sizeof(char));
+        name2 = argv[1];
+        strcpy(name2, argv[1]);
 
         {
             kill(memPointer->Server, SIGUSR1);
@@ -466,10 +495,7 @@ int main(int argc, char *argv[])
                 perror("Shared Memory Detaching Error");
                 return 0;
             }
-            semId = -2;
         }
-
-        free(name);
     }
 
     return 0;

@@ -405,16 +405,16 @@ void sigHandler(int signal)
 
             print("alarm\n");
 
-            if (semop(semId, &v_ops[1], 1) < 0)
-            {
-                perror("Error in Semaphore Operation (S, prevalrm1)");
-                return;
-            }
-            if (semop(semId, &v_ops[2], 1) < 0)
-            {
-                perror("Error in Semaphore Operation (S, prevalrm2)");
-                return;
-            }
+            // if (semop(semId, &v_ops[1], 1) < 0)
+            // {
+            //     perror("Error in Semaphore Operation (S, prevalrm1)");
+            //     return;
+            // }
+            // if (semop(semId, &v_ops[2], 1) < 0)
+            // {
+            //     perror("Error in Semaphore Operation (S, prevalrm2)");
+            //     return;
+            // }
 
             if (memPointer->current == memPointer->Client1)
             {
@@ -427,6 +427,8 @@ void sigHandler(int signal)
                 }
                 enableSigSet();
 
+                kill(memPointer->Client1, SIGALRM);
+                kill(memPointer->Client2, SIGALRM);
                 closure();
             }
             else if (memPointer->current == memPointer->Client2)
@@ -439,6 +441,9 @@ void sigHandler(int signal)
                     return;
                 }
                 enableSigSet();
+
+                kill(memPointer->Client1, SIGALRM);
+                kill(memPointer->Client2, SIGALRM);
                 closure();
             }
         }
