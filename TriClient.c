@@ -192,13 +192,36 @@ void receiveMessage()
     print(receiver.Text);
 }
 
+int moveFlag = 0;
+void makeMove() // senza semafori
+{
+    moveFlag = 1;
+    do
+    {
+        scanf("%s", choice);
+    } while (choice[0] == '\n');
+
+    if (choice[0] < '1' || choice[0] > '9')
+    {
+        memPointer->move = -1;
+    }
+    else
+    {
+        memPointer->move = (choice[0] - '0') - 1;
+    }
+    moveFlag = 0;
+}
+
 void sigHandlerC(int signal)
 {
-    disableSigSet();
-    if (semop(semId, &p_ops[0], 1) == -1)
+    if (moveFlag != 0)
     {
-        perror("Error in Semaphore Operation (C, p, 60)");
-        return;
+        disableSigSet();
+        if (semop(semId, &p_ops[0], 1) == -1)
+        {
+            perror("Error in Semaphore Operation (C, p, 60)");
+            return;
+        }
     }
 
     if (signal == SIGINT)
@@ -270,28 +293,6 @@ void sigHandlerB(int signal)
     if (signal == SIGINT || signal == SIGALRM)
     {
         closure();
-    }
-}
-
-void makeMove() // senza semafori
-{
-    if (memPointer->onGame == 1)
-    {
-        closure();
-    }
-
-    do
-    {
-        scanf("%s", choice);
-    } while (choice[0] == '\n');
-
-    if (choice[0] < '1' || choice[0] > '9')
-    {
-        memPointer->move = -1;
-    }
-    else
-    {
-        memPointer->move = (choice[0] - '0') - 1;
     }
 }
 
@@ -507,6 +508,7 @@ int main(int argc, char *argv[])
             }
 
             showMatrix();
+            makeMove();
 
             if (semop(semId, &v_ops[0], 1) < 0)
             {
@@ -514,8 +516,6 @@ int main(int argc, char *argv[])
                 return 0;
             }
             enableSigSet();
-
-            makeMove();
 
             if (semop(semId, &v_ops[3], 1) < 0)
             {
@@ -563,6 +563,7 @@ int main(int argc, char *argv[])
             }
 
             showMatrix();
+            makeMove();
 
             if (semop(semId, &v_ops[0], 1) < 0)
             {
@@ -570,8 +571,6 @@ int main(int argc, char *argv[])
                 return 0;
             }
             enableSigSet();
-
-            makeMove();
 
             if (semop(semId, &v_ops[3], 1) < 0)
             {
