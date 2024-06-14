@@ -248,7 +248,6 @@ void sigHandlerC(int signal)
         }
         enableSigSet();
         receiveMessage();
-        print("ci\n");
         closure();
     }
 
@@ -258,6 +257,14 @@ void sigHandlerC(int signal)
         return;
     }
     enableSigSet();
+}
+
+void sigHandlerB(int signal)
+{
+    if (signal == SIGINT)
+    {
+        closure();
+    }
 }
 
 void makeMove() // senza semafori
@@ -279,13 +286,17 @@ void makeMove() // senza semafori
 
 int main(int argc, char *argv[])
 {
-
+    int BOT = 0;
     // controllo degli argomenti ---------------------------------------------------------------//
     if (argc == 3)
     {
-        if (argv[2] != "*")
+        if (argv[2][0] == '#' && argv[2][1] == '!' && argv[2][2] == '*' && argv[2][3] == '-' && argv[2][4] == '_' && argv[2][5] == '?' && argv[2][6] == '\0')
         {
-            printf("Inserimento scorretto dei parametri richiesti.\nIl giocatore deve indicare (spaziati): il proprio nome ed eventualmente * per giocare contro la CPU.\nRiprovare\n");
+            BOT = 1;
+        }
+        else if (argv[2][0] != '*')
+        {
+            printf("\nInserimento scorretto dei parametri richiesti.\nIl giocatore deve indicare (spaziati): il proprio nome ed eventualmente * per giocare contro la CPU.\nRiprovare\n");
             return 0;
         }
     }
@@ -349,14 +360,26 @@ int main(int argc, char *argv[])
         }
     }
 
-    sigfillset(&disabledSigSet);
-    sigdelset(&disabledSigSet, SIGINT);
-    sigdelset(&disabledSigSet, SIGALRM);
-    enableSigSet();
-    signal(SIGINT, sigHandlerC);
-    signal(SIGUSR1, sigHandlerC);
-    signal(SIGUSR2, sigHandlerC);
-    signal(SIGALRM, sigHandlerC);
+    if (BOT == 1)
+    {
+        sigfillset(&disabledSigSet);
+        sigdelset(&disabledSigSet, SIGINT);
+        enableSigSet();
+        signal(SIGINT, sigHandlerB);
+        signal(SIGUSR1, sigHandlerB);
+        signal(SIGUSR2, sigHandlerB);
+    }
+    else
+    {
+        sigfillset(&disabledSigSet);
+        sigdelset(&disabledSigSet, SIGINT);
+        sigdelset(&disabledSigSet, SIGALRM);
+        enableSigSet();
+        signal(SIGINT, sigHandlerC);
+        signal(SIGUSR1, sigHandlerC);
+        signal(SIGUSR2, sigHandlerC);
+        signal(SIGALRM, sigHandlerC);
+    }
     //----------------------------------------------------------------------------------//
 
     // blocco di codice #TODO ----------------------------------------------------------//
@@ -368,6 +391,36 @@ int main(int argc, char *argv[])
     {
         perror("Error in Semaphore Operation (C, p, 0)");
         return 0;
+    }
+
+    if (BOT == 1)
+    {
+        memPointer->Client2 = getpid();
+        receiver.Type = 2;
+
+        if (semop(semId, &v_ops[0], 1) == -1)
+        {
+            perror("Error in Semaphore Operation (B, v, 0)");
+            return 0;
+        }
+        enableSigSet();
+
+        while (1)
+        {
+            disableSigSet();
+            if (semop(semId, &p_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (B, p, 1)");
+                return 0;
+            }
+
+            if (semop(semId, &v_ops[0], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (B, v, 1)");
+                return 0;
+            }
+            enableSigSet();
+        }
     }
 
     if (memPointer->Client1 == -11)

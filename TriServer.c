@@ -26,6 +26,7 @@ int shmId = -2, msgId = -2, semId = -2;
 sigset_t disabledSigSet;
 struct sembuf p_ops[semNum];
 struct sembuf v_ops[semNum];
+pid_t bPid = 0;
 
 typedef struct sharedMemoryStruct
 {
@@ -388,17 +389,17 @@ void sigHandler(int signal)
         {
             if (memPointer->current == -1)
             {
-                if (memPointer->Client2 != -12)
+                if (memPointer->Client2 == -10)
+                {
+                    print("Inizio partita contro il computer.\n");
+                }
+                else if (memPointer->Client2 != -12)
                 {
                     print("Giocatore 2 individuato.\n");
                 }
                 else if (memPointer->Client1 != -11)
                 {
                     print("Giocatore 1 individuato.\n");
-                    if (memPointer->Client2 == -10)
-                    {
-                        print("Inizio partita contro il Computer.\n");
-                    }
                 }
             }
         }
@@ -643,19 +644,59 @@ int main(int argc, char *argv[])
         }
     } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11));
 
-    if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
+    if (memPointer->Client1 != -11 && memPointer->Client2 == -10)
     {
-        sendMessage("Entrambi i giocatori individuati. Partita avviata.\n", 0, 1);
+        memPointer->current = memPointer->Client1;
+        sendMessage("Inizio partita contro la CPU.\n", 1, 0);
+        if (semop(semId, &v_ops[0], 1) == -1)
+        {
+            perror("Error in Semaphore Operation (S, vbot, 3)");
+            return 0;
+        }
+        enableSigSet();
+
+        bPid = fork();
+        if (bPid == 0)
+        {
+            // handler del bot
+            if (semop(semId, &p_ops[0], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (b, p, 1)");
+                return 0;
+            }
+            memPointer->Client2 = getpid();
+            if (semop(semId, &v_ops[0], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (b, v, 1)");
+                return 0;
+            }
+
+            execl("./TriClient", "./TriClient", "BOT", "#!*-_?", (char *)NULL);
+        }
+    }
+    else if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
+    {
+        sendMessage("Entrambi i giocatori individuati. Partita avviata.\nComincia l'altro giocatore.", 0, 1);
         sendMessage("Entrambi i giocatori individuati. Partita avviata.\nCominci tu, giocatore 1. Scegli la tua mossa:\n", 1, 0);
         memPointer->current = memPointer->Client1;
+        if (semop(semId, &v_ops[0], 1) == -1)
+        {
+            perror("Error in Semaphore Operation (S, v, 3)");
+            return 0;
+        }
+        enableSigSet();
     }
-
-    if (semop(semId, &v_ops[0], 1) == -1)
+    else
     {
-        perror("Error in Semaphore Operation (S, v, 3)");
-        return 0;
+        if (semop(semId, &v_ops[0], 1) == -1)
+        {
+            perror("Error in Semaphore Operation (S, verr, 3)");
+            return 0;
+        }
+        enableSigSet();
+        perror("error during players research");
+        closure();
     }
-    enableSigSet();
 
     if (timeOut != 0)
     {
