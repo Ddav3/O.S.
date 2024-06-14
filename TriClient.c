@@ -17,6 +17,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 
 #define semNum 4
 
@@ -28,6 +29,7 @@ sigset_t disabledSigSet;
 struct sembuf p_ops[semNum];
 struct sembuf v_ops[semNum];
 char choice[50];
+int BOT = 0;
 
 typedef union semUnion
 {
@@ -140,7 +142,11 @@ void closure()
         perror("No name was relesable");
         exit(-1);
     }
-    print("closing...\n");
+
+    if (BOT == 0)
+    {
+        print("closing...\n");
+    }
 
     kill(s, SIGUSR2); // quando arriva di là un sigusr2, il server deve fare qualcosa per chiudere
 
@@ -247,7 +253,7 @@ void sigHandlerC(int signal)
             return;
         }
         enableSigSet();
-        receiveMessage();
+
         closure();
     }
 
@@ -261,7 +267,7 @@ void sigHandlerC(int signal)
 
 void sigHandlerB(int signal)
 {
-    if (signal == SIGINT)
+    if (signal == SIGINT || signal == SIGALRM)
     {
         closure();
     }
@@ -269,6 +275,11 @@ void sigHandlerB(int signal)
 
 void makeMove() // senza semafori
 {
+    if (memPointer->onGame == 1)
+    {
+        closure();
+    }
+
     do
     {
         scanf("%s", choice);
@@ -286,7 +297,7 @@ void makeMove() // senza semafori
 
 int main(int argc, char *argv[])
 {
-    int BOT = 0;
+
     // controllo degli argomenti ---------------------------------------------------------------//
     if (argc == 3)
     {
@@ -364,8 +375,10 @@ int main(int argc, char *argv[])
     {
         sigfillset(&disabledSigSet);
         sigdelset(&disabledSigSet, SIGINT);
+        sigdelset(&disabledSigSet, SIGALRM);
         enableSigSet();
         signal(SIGINT, sigHandlerB);
+        signal(SIGALRM, sigHandlerB);
         signal(SIGUSR1, sigHandlerB);
         signal(SIGUSR2, sigHandlerB);
     }
@@ -383,8 +396,11 @@ int main(int argc, char *argv[])
     //----------------------------------------------------------------------------------//
 
     // blocco di codice #TODO ----------------------------------------------------------//
-    printf("Process Pid: %d\n", getpid());
-    fflush(stdout);
+    if (BOT == 0)
+    {
+        printf("Process Pid: %d\n", getpid());
+        fflush(stdout);
+    }
 
     disableSigSet();
     if (semop(semId, &p_ops[0], 1) == -1)
@@ -407,19 +423,38 @@ int main(int argc, char *argv[])
 
         while (1)
         {
-            disableSigSet();
+
+            if (semop(semId, &p_ops[2], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (B, p2, 1)");
+                return 0;
+            }
+
             if (semop(semId, &p_ops[0], 1) == -1)
             {
                 perror("Error in Semaphore Operation (B, p, 1)");
                 return 0;
             }
 
+            memPointer->current = memPointer->Client2;
+
+            do
+            {
+                srand(time(NULL));
+                memPointer->move = rand() % 9;
+            } while (memPointer->table[memPointer->move / 3][memPointer->move % 3] != ' ');
+
             if (semop(semId, &v_ops[0], 1) == -1)
             {
                 perror("Error in Semaphore Operation (B, v, 1)");
                 return 0;
             }
-            enableSigSet();
+
+            if (semop(semId, &v_ops[3], 1) == -1)
+            {
+                perror("Error in Semaphore Operation (B, v3, 1)");
+                return 0;
+            }
         }
     }
 
@@ -519,7 +554,6 @@ int main(int argc, char *argv[])
                 return 0;
             }
 
-            // mossa
             memPointer->current = getpid();
 
             if (semop(semId, &p_ops[0], 1) < 0)
@@ -550,6 +584,13 @@ int main(int argc, char *argv[])
     }
     else
     {
+        if (semop(semId, &v_ops[0], 1) == -1)
+        {
+            perror("Error in Semaphore Operation (x, v, 0)");
+            return 0;
+        }
+
+        enableSigSet();
         print("Partita occupata.\n");
         if (&memPointer != 0)
         {
