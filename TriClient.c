@@ -143,14 +143,9 @@ void closure()
         exit(-1);
     }
 
-    if (BOT == 0)
-    {
-        print("closing...\n");
-    }
-
     kill(s, SIGUSR2); // quando arriva di là un sigusr2, il server deve fare qualcosa per chiudere
 
-    exit(-1);
+    exit(0);
 }
 
 void showMatrix() // senza semafori

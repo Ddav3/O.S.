@@ -166,7 +166,6 @@ void closure()
         semId = -2;
     }
 
-    print("Deleting...\n");
     exit(0);
 }
 
@@ -278,7 +277,7 @@ void winCondition()
         }
         else if (memPointer->table[1][1] == symbol2)
         {
-            sendMessage("Vince il giocatore 2! Congratulazioni!\n", 1, 1);
+            sendMessage("Vince il giocatore 2 per diagonale! Congratulazioni!\n", 1, 1);
         }
         if (semop(semId, &v_ops[1], 1) < 0)
         {
@@ -290,6 +289,7 @@ void winCondition()
             perror("Error in Semaphore Operation (S, v2, 22)");
             return;
         }
+        closure();
     }
 
     draw++;
@@ -697,7 +697,7 @@ int main(int argc, char *argv[])
 
     if (timeOut != 0)
     {
-        alarm(timeOut);
+        alarm(40);
     }
 
     while (1) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
