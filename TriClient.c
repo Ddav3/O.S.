@@ -1,7 +1,7 @@
 /************************************
  *VR485815
  *Davide Sala
- *Data di realizzazione  <--------------------------------------------------------------
+ *Data di realizzazione  16/06/2024
  *************************************/
 
 #include <stdio.h>
@@ -193,8 +193,13 @@ void makeMove() // senza semafori
     moveFlag = 1;
     do
     {
+        if (strlen(choice) > 0)
+        {
+            print("Puoi inserire solo un carattere. Inserisci la tua mossa:");
+            memset(choice, 0, strlen(choice));
+        }
         scanf("%s", choice);
-    } while (choice[0] == '\n');
+    } while (choice[0] == '\n' || strlen(choice) > 1);
 
     if (choice[0] < '1' || choice[0] > '9')
     {
@@ -203,7 +208,13 @@ void makeMove() // senza semafori
     else
     {
         memPointer->move = (choice[0] - '0') - 1;
+        if (memPointer->table[memPointer->move / 3][memPointer->move % 3] != ' ')
+        {
+            memPointer->move = -1;
+        }
     }
+    memset(choice, 0, strlen(choice));
+
     moveFlag = 0;
 }
 
@@ -258,6 +269,10 @@ void sigHandlerC(int signal)
             closure();
             exit(0);
         }
+    }
+    else if (signal == SIGUSR1)
+    {
+        showMatrix();
     }
     else if (signal == SIGUSR2)
     {
@@ -391,7 +406,7 @@ int main(int argc, char *argv[])
     }
     //----------------------------------------------------------------------------------//
 
-    // blocco di codice #TODO ----------------------------------------------------------//
+    // blocco di codice ----------------------------------------------------------//
     if (BOT == 0)
     {
         printf("Process Pid: %d\n", getpid());
@@ -494,15 +509,18 @@ int main(int argc, char *argv[])
                 perror("Error in Semaphore Operation (C1, p1, 1)");
                 return 0;
             }
-            memPointer->current = getpid();
 
             if (semop(semId, &p_ops[0], 1) < 0)
             {
                 perror("Error in Semaphore Operation (C1, p, 2)");
                 return 0;
             }
+            memPointer->current = getpid();
 
+            printf("Tocca a te, %s!\n", name1);
+            fflush(stdout);
             showMatrix();
+            print("Inserisci la tua mossa: ");
             makeMove();
 
             if (semop(semId, &v_ops[0], 1) < 0)
@@ -518,6 +536,7 @@ int main(int argc, char *argv[])
                 return 0;
             }
             enableSigSet();
+            pause();
         }
 
         return 0;
@@ -549,15 +568,17 @@ int main(int argc, char *argv[])
                 return 0;
             }
 
-            memPointer->current = getpid();
-
             if (semop(semId, &p_ops[0], 1) < 0)
             {
                 perror("Error in Semaphore Operation (C2, p, 2)");
                 return 0;
             }
+            memPointer->current = getpid();
 
+            printf("Tocca a te, %s!\n", name2);
+            fflush(stdout);
             showMatrix();
+            print("Scegli la tua mossa: ");
             makeMove();
 
             if (semop(semId, &v_ops[0], 1) < 0)
@@ -572,6 +593,7 @@ int main(int argc, char *argv[])
                 perror("Error in Semaphore Operation (C2, v3, 1)");
                 return 0;
             }
+            pause();
         }
 
         return 0;

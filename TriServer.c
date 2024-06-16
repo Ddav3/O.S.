@@ -1,7 +1,7 @@
 /************************************
  *VR485815
  *Davide Sala
- *Data di realizzazione  <--------------------------------------------------------------
+ *Data di realizzazione  16/06/2024
  *************************************/
 
 #include <stdio.h>
@@ -106,9 +106,6 @@ void closure()
             kill(memPointer->Client2, SIGINT);
         }
 
-        // #TODO idea alternativa: kill al primo processo per evitare che si mischino i segnali
-        //  prima kill a 1 aspetto risponda, poi kill a 2
-
         while ((memPointer->Client1 != -11 || memPointer->Client2 != -12))
         {
             if (semop(semId, &v_ops[0], 1) == -1)
@@ -191,7 +188,7 @@ void sendMessage(char *msg, int who1, int who2)
         kill(memPointer->Client1, SIGUSR2);
     }
 
-    if (who2 == 1)
+    if (who2 == 1 && bPid == 0)
     {
         message.Type = 2;
         msgSize = sizeof(message) - sizeof(long);
@@ -227,10 +224,15 @@ void winCondition()
         {
             if (memPointer->table[i][1] == symbol1)
             {
+                kill(memPointer->Client1, SIGUSR1);
                 sendMessage("Vince il giocatore 1 per riga! Congratulazioni!\n", 1, 1);
             }
             else if (memPointer->table[i][1] == symbol2)
             {
+                if (bPid == 0)
+                {
+                    kill(memPointer->Client2, SIGUSR1);
+                }
                 sendMessage("Vince il giocatore 2! Congratulazioni!\n", 1, 1);
             }
             if (semop(semId, &v_ops[1], 1) < 0)
@@ -311,9 +313,21 @@ void winCondition()
     }
 }
 
-void compileMatrix(char symbol)
+void compileMatrix(char symbol, int who)
 {
     memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol;
+    if (who == 0)
+    {
+        kill(memPointer->Client1, SIGUSR1);
+    }
+    else
+    {
+        if (bPid == 0)
+        {
+
+            kill(memPointer->Client2, SIGUSR1);
+        }
+    }
     winCondition();
 }
 
@@ -332,7 +346,7 @@ void sigHandler(int signal)
         {
             if (memPointer->Client2 != bPid)
             {
-                sendMessage("Il giocatore 1 si è arreso. Hai vinto tu, giocatore 2!\n", 0, 1);
+                sendMessage("\nIl giocatore 1 si è arreso. Hai vinto tu, giocatore 2!\n", 0, 1);
             }
             if (semop(semId, &v_ops[0], 1) == -1)
             {
@@ -343,7 +357,7 @@ void sigHandler(int signal)
         }
         else if (memPointer->current == -20)
         {
-            sendMessage("Il giocatore 2 si è arreso. Hai vinto tu, giocatore 1!\n", 1, 0);
+            sendMessage("\nIl giocatore 2 si è arreso. Hai vinto tu, giocatore 1!\n", 1, 0);
             if (semop(semId, &v_ops[0], 1) == -1)
             {
                 perror("Error in Semaphore Operation (Sc, v, 2)");
@@ -421,11 +435,11 @@ void sigHandler(int signal)
                     perror("Error in Semaphore Operation (S, prevalrm2)");
                     return;
                 }
-                sendMessage("Perdita per abbandono.\n", 1, 0);
+                sendMessage("\nTempo scaduto. Hai perso.\n", 1, 0);
                 kill(memPointer->Client1, SIGALRM);
                 if (memPointer->Client2 != bPid)
                 {
-                    sendMessage("Vittoria per abbandono.\n", 0, 1);
+                    sendMessage("Vittoria per Time Out.\n", 0, 1);
                     kill(memPointer->Client2, SIGALRM);
                 }
 
@@ -447,10 +461,10 @@ void sigHandler(int signal)
                 }
                 if (memPointer->Client2 != bPid)
                 {
-                    sendMessage("Perdita per abbandono.\n", 0, 1);
+                    sendMessage("\nTempo scaduto. Hai perso.\n", 0, 1);
                     kill(memPointer->Client2, SIGALRM);
                 }
-                sendMessage("Vittoria per abbandono.\n", 1, 0);
+                sendMessage("Vittoria per Time Out.\n", 1, 0);
                 kill(memPointer->Client1, SIGALRM);
                 if (semop(semId, &v_ops[0], 1) < 0)
                 {
@@ -610,7 +624,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    if (memPointer->onGame > 0) // una partita è già in corso
+    if (memPointer->onGame >= 1) // una partita è già in corso
     {
         print("Una partita è già in corso.\n");
         if (semop(semId, &v_ops[0], 1) < 0)
@@ -637,6 +651,14 @@ int main(int argc, char *argv[])
 
     do
     {
+        if (memPointer->Client1 == -11)
+        {
+            print("Ricerca primo giocatore in corso...\n");
+        }
+        if (memPointer->Client2 == -12)
+        {
+            print("Ricerca secondo giocatore in corso...\n");
+        }
         if (semop(semId, &v_ops[0], 1) < 0)
         {
             perror("Error in Semaphore Operation (S, v, 2)");
@@ -653,6 +675,9 @@ int main(int argc, char *argv[])
             return 0;
         }
     } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11));
+
+    // system("clear");
+    print("----------------------\nPartita avviata.\n");
 
     if (memPointer->Client1 != -11 && memPointer->Client2 == -10)
     {
@@ -673,8 +698,8 @@ int main(int argc, char *argv[])
     }
     else if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
     {
-        sendMessage("Entrambi i giocatori individuati. Partita avviata.\nComincia l'altro giocatore.\n", 0, 1);
-        sendMessage("Entrambi i giocatori individuati. Partita avviata.\nCominci tu, giocatore 1. Scegli la tua mossa:\n", 1, 0);
+        sendMessage("Entrambi i giocatori individuati. Partita avviata.\nCominci per secondo.\n\nAttendi che l'altro giocatore faccia la sua mossa...\n", 0, 1);
+        sendMessage("Entrambi i giocatori individuati. Partita avviata.\n", 1, 0);
         memPointer->current = memPointer->Client1;
         if (semop(semId, &v_ops[0], 1) == -1)
         {
@@ -700,7 +725,7 @@ int main(int argc, char *argv[])
         alarm(40);
     }
 
-    while (1) // se uno dei due valori è stato messo a -2 vuol dire che sono passato dalla closure. Chiudo il while ed esco
+    while (1)
     {
         disableSigSet();
         if (semop(semId, &p_ops[3], 1) == -1)
@@ -715,50 +740,43 @@ int main(int argc, char *argv[])
 
         alarm(0);
 
-        if (memPointer->move == -1)
+        if (memPointer->current == memPointer->Client1)
         {
-            // gestisci dopo
-            enableSigSet();
-
-            break;
-        }
-        else
-        {
-            if (memPointer->table[memPointer->move / 3][memPointer->move % 3] == ' ')
+            if (memPointer->move == -1)
             {
-                if (memPointer->current == memPointer->Client1)
-                {
-                    compileMatrix(symbol1);
-                    if (semop(semId, &v_ops[2], 1) < 0)
-                    {
-                        perror("Error in Semaphore Operation (S, v2, 51)");
-                        return 0;
-                    }
-                }
-                else if (memPointer->current == memPointer->Client2)
-                {
-                    compileMatrix(symbol2);
-                    if (semop(semId, &v_ops[1], 1) < 0)
-                    {
-                        perror("Error in Semaphore Operation (S, v1, 51)");
-                        return 0;
-                    }
-                }
+                sendMessage("Selezione non valida. Turno perso.\n", 1, 0);
             }
             else
             {
-                if (semop(semId, &v_ops[0], 1) < 0)
-                {
-                    perror("Error in Semaphore Operation (S, v, 30)");
-                    return 0;
-                }
-                enableSigSet();
-                closure();
+                compileMatrix(symbol1, 0);
             }
-            if (timeOut != 0)
+
+            if (semop(semId, &v_ops[2], 1) < 0)
             {
-                alarm(timeOut);
+                perror("Error in Semaphore Operation (S, v2, 51)");
+                return 0;
             }
+        }
+        else if (memPointer->current == memPointer->Client2)
+        {
+            if (memPointer->move == -1)
+            {
+                sendMessage("Selezione non valida. Turno perso.\n", 0, 1);
+            }
+            else
+            {
+                compileMatrix(symbol2, 1);
+            }
+            if (semop(semId, &v_ops[1], 1) < 0)
+            {
+                perror("Error in Semaphore Operation (S, v1, 51)");
+                return 0;
+            }
+        }
+        // }
+        if (timeOut != 0)
+        {
+            alarm(timeOut);
         }
     }
 
