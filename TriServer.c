@@ -1,7 +1,7 @@
 /************************************
  *VR485815
  *Davide Sala
- *Data di realizzazione  16/06/2024
+ *Data di realizzazione: 16/06/2024
  *************************************/
 
 #include <stdio.h>
@@ -66,7 +66,6 @@ void print(char *txt)
         perror("Error in writing messange");
     }
 }
-
 void disableSigSet()
 {
     sigfillset(&disabledSigSet);
@@ -74,7 +73,6 @@ void disableSigSet()
     sigdelset(&disabledSigSet, SIGALRM);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
-
 void enableSigSet()
 {
     sigdelset(&disabledSigSet, SIGUSR1);
@@ -165,7 +163,6 @@ void closure()
 
     exit(0);
 }
-
 void sendMessage(char *msg, int who1, int who2)
 {
     memcpy(message.Text, msg, strlen(msg) + 1);
@@ -224,16 +221,23 @@ void winCondition()
         {
             if (memPointer->table[i][1] == symbol1)
             {
-                kill(memPointer->Client1, SIGUSR1);
                 sendMessage("Vince il giocatore 1 per riga! Congratulazioni!\n", 1, 1);
+                kill(memPointer->Client1, SIGUSR1);
+                kill(memPointer->Client2, SIGUSR1);
             }
             else if (memPointer->table[i][1] == symbol2)
             {
                 if (bPid == 0)
                 {
+                    sendMessage("Vince il giocatore 2 per riga! Congratulazioni!\n", 1, 1);
                     kill(memPointer->Client2, SIGUSR1);
+                    kill(memPointer->Client1, SIGUSR1);
                 }
-                sendMessage("Vince il giocatore 2! Congratulazioni!\n", 1, 1);
+                else
+                {
+                    sendMessage("Vince il bot!\n", 1, 0);
+                    kill(memPointer->Client1, SIGUSR1);
+                }
             }
             if (semop(semId, &v_ops[1], 1) < 0)
             {
@@ -252,10 +256,22 @@ void winCondition()
             if (memPointer->table[1][i] == symbol1)
             {
                 sendMessage("Vince il giocatore 1 per colonna! Congratulazioni!\n", 1, 1);
+                kill(memPointer->Client2, SIGUSR1);
+                kill(memPointer->Client1, SIGUSR1);
             }
             else if (memPointer->table[1][i] == symbol2)
             {
-                sendMessage("Vince il giocatore 2! Congratulazioni!\n", 1, 1);
+                if (bPid == 0)
+                {
+                    sendMessage("Vince il giocatore 2 per colonna! Congratulazioni!\n", 1, 1);
+                    kill(memPointer->Client2, SIGUSR1);
+                    kill(memPointer->Client1, SIGUSR1);
+                }
+                else
+                {
+                    sendMessage("Vince il bot!\n", 1, 0);
+                    kill(memPointer->Client1, SIGUSR1);
+                }
             }
             if (semop(semId, &v_ops[1], 1) < 0)
             {
@@ -276,10 +292,22 @@ void winCondition()
         if (memPointer->table[1][1] == symbol1)
         {
             sendMessage("Vince il giocatore 1 per diagonale! Congratulazioni!\n", 1, 1);
+            kill(memPointer->Client1, SIGUSR1);
+            kill(memPointer->Client2, SIGUSR1);
         }
         else if (memPointer->table[1][1] == symbol2)
         {
-            sendMessage("Vince il giocatore 2 per diagonale! Congratulazioni!\n", 1, 1);
+            if (bPid == 0)
+            {
+                sendMessage("Vince il giocatore 2 per diagonale! Congratulazioni!\n", 1, 1);
+                kill(memPointer->Client1, SIGUSR1);
+                kill(memPointer->Client2, SIGUSR1);
+            }
+            else
+            {
+                sendMessage("Vince il bot!\n", 1, 0);
+                kill(memPointer->Client1, SIGUSR1);
+            }
         }
         if (semop(semId, &v_ops[1], 1) < 0)
         {
@@ -297,6 +325,14 @@ void winCondition()
     draw++;
     if (draw == 9)
     {
+        if (memPointer->current != memPointer->Client1)
+        {
+            kill(memPointer->Client1, SIGUSR1);
+        }
+        else
+        {
+            kill(memPointer->Client2, SIGUSR1);
+        }
         sendMessage("Pareggio!\n", 1, 1);
 
         if (semop(semId, &v_ops[1], 1) < 0)
@@ -312,7 +348,6 @@ void winCondition()
         closure();
     }
 }
-
 void compileMatrix(char symbol, int who)
 {
     memPointer->table[memPointer->move / 3][memPointer->move % 3] = symbol;
@@ -330,7 +365,6 @@ void compileMatrix(char symbol, int who)
     }
     winCondition();
 }
-
 void sigHandler(int signal)
 {
     disableSigSet();
@@ -404,20 +438,17 @@ void sigHandler(int signal)
         memPointer->onGame = 3;
         if (signal == SIGUSR1)
         {
-            if (memPointer->current == -1)
+            if (memPointer->Client2 == -10)
             {
-                if (memPointer->Client2 == -10)
-                {
-                    print("Inizio partita contro il computer.\n");
-                }
-                else if (memPointer->Client2 != -12)
-                {
-                    print("Giocatore 2 individuato.\n");
-                }
-                else if (memPointer->Client1 != -11)
-                {
-                    print("Giocatore 1 individuato.\n");
-                }
+                print("Inizio partita contro il computer.\n");
+            }
+            else if (memPointer->Client2 != -12)
+            {
+                print("Giocatore 2 individuato.\n");
+            }
+            else if (memPointer->Client1 != -11)
+            {
+                print("Giocatore 1 individuato.\n");
             }
         }
         else if (signal == SIGUSR2)
@@ -614,9 +645,6 @@ int main(int argc, char *argv[])
     //----------------------------------------------------------------------------------------------//
 
     // corpo del codice ------------------------------------------------------------------//
-    printf("Process Pid: %d\n", getpid());
-    fflush(stdout);
-
     disableSigSet();
     if (semop(semId, &p_ops[0], 1) == -1)
     {
@@ -676,13 +704,12 @@ int main(int argc, char *argv[])
         }
     } while ((memPointer->Client2 == -12 || memPointer->Client1 == -11));
 
-    // system("clear");
-    print("----------------------\nPartita avviata.\n");
+    print("Partita avviata.\n");
 
     if (memPointer->Client1 != -11 && memPointer->Client2 == -10)
     {
         memPointer->current = memPointer->Client1;
-        sendMessage("Inizio partita contro la CPU.\n", 1, 0);
+        sendMessage("Inizio partita contro la CPU.\nRegole: ogni giocatore deve scegliere la propria mossa inserendo\nun numero da 1 a 9 in base alla cella che vuole occupare.\nI numeri delle celle sono organizzati come segue:\n\n 1 | 2 | 3\n___|___|___\n 4 | 5 | 6\n___|___|___\n 7 | 8 | 9\n   |   |   \n", 1, 0);
         if (semop(semId, &v_ops[0], 1) == -1)
         {
             perror("Error in Semaphore Operation (S, vbot, 3)");
@@ -698,8 +725,8 @@ int main(int argc, char *argv[])
     }
     else if (memPointer->Client1 != -11 && memPointer->Client2 != -12)
     {
-        sendMessage("Entrambi i giocatori individuati. Partita avviata.\nCominci per secondo.\n\nAttendi che l'altro giocatore faccia la sua mossa...\n", 0, 1);
-        sendMessage("Entrambi i giocatori individuati. Partita avviata.\n", 1, 0);
+        sendMessage("Entrambi i giocatori individuati. Partita avviata.\nRegole: ogni giocatore deve scegliere la propria mossa inserendo\nun numero da 1 a 9 in base alla cella che vuole occupare.\nI numeri delle celle sono organizzati come segue:\n\n 1 | 2 | 3\n___|___|___\n 4 | 5 | 6\n___|___|___\n 7 | 8 | 9\n   |   |   \n\nCominci per secondo.\nAttendi che l'altro giocatore faccia la sua mossa...\n", 0, 1);
+        sendMessage("Entrambi i giocatori individuati. Partita avviata.\nRegole: ogni giocatore deve scegliere la propria mossa inserendo\nun numero da 1 a 9 in base alla cella che vuole occupare.\nI numeri delle celle sono organizzati come segue:\n\n 1 | 2 | 3\n___|___|___\n 4 | 5 | 6\n___|___|___\n 7 | 8 | 9\n   |   |   \n", 1, 0);
         memPointer->current = memPointer->Client1;
         if (semop(semId, &v_ops[0], 1) == -1)
         {

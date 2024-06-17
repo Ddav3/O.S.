@@ -1,7 +1,7 @@
 /************************************
  *VR485815
  *Davide Sala
- *Data di realizzazione  16/06/2024
+ *Data di realizzazione: 16/06/2024
  *************************************/
 
 #include <stdio.h>
@@ -70,14 +70,12 @@ void disableSigSet()
     sigdelset(&disabledSigSet, SIGALRM);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
-
 void enableSigSet()
 {
     sigdelset(&disabledSigSet, SIGUSR1);
     sigdelset(&disabledSigSet, SIGUSR2);
     sigprocmask(SIG_SETMASK, &disabledSigSet, NULL);
 }
-
 void print(char *txt)
 {
     if (write(1, txt, strlen(txt)) < 0)
@@ -147,7 +145,6 @@ void closure()
 
     exit(0);
 }
-
 void showMatrix() // senza semafori
 {
     printf("\n");
@@ -176,7 +173,6 @@ void showMatrix() // senza semafori
         }
     }
 }
-
 void receiveMessage()
 {
     if (msgrcv(msgId, &receiver, msgSize, receiver.Type, 0) < 0)
@@ -195,7 +191,7 @@ void makeMove() // senza semafori
     {
         if (strlen(choice) > 0)
         {
-            print("Puoi inserire solo un carattere. Inserisci la tua mossa:");
+            print("Puoi inserire solo un carattere numerico. Inserisci la tua mossa:");
             memset(choice, 0, strlen(choice));
         }
         scanf("%s", choice);
@@ -217,7 +213,6 @@ void makeMove() // senza semafori
 
     moveFlag = 0;
 }
-
 void sigHandlerC(int signal)
 {
     if (moveFlag != 0)
@@ -297,7 +292,6 @@ void sigHandlerC(int signal)
     }
     enableSigSet();
 }
-
 void sigHandlerB(int signal)
 {
     if (signal == SIGINT || signal == SIGALRM)
@@ -407,12 +401,6 @@ int main(int argc, char *argv[])
     //----------------------------------------------------------------------------------//
 
     // blocco di codice ----------------------------------------------------------//
-    if (BOT == 0)
-    {
-        printf("Process Pid: %d\n", getpid());
-        fflush(stdout);
-    }
-
     disableSigSet();
     if (semop(semId, &p_ops[0], 1) == -1)
     {
@@ -559,6 +547,7 @@ int main(int argc, char *argv[])
             enableSigSet();
             pause();
         }
+
         while (1)
         {
             disableSigSet();
